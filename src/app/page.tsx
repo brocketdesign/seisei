@@ -61,8 +61,8 @@ export default function Home() {
             <span className="text-[10px] text-gray-400 tracking-widest ml-1 mt-1 hidden sm:inline">SEISEI</span>
           </div>
           <div className="flex items-center gap-3 sm:gap-6">
-            <Link href="#features" className="text-sm text-gray-500 hover:text-black transition-colors hidden md:block">機能</Link>
             <Link href="#demo" className="text-sm text-gray-500 hover:text-black transition-colors hidden md:block">デモ</Link>
+            <Link href="#features" className="text-sm text-gray-500 hover:text-black transition-colors hidden md:block">機能</Link>
             <Link
               href="/login"
               className="text-xs sm:text-sm font-medium text-gray-600 hover:text-black transition-colors"
@@ -82,7 +82,7 @@ export default function Home() {
       {/* ============================================================ */}
       {/*  HERO — Segmind-style visual flow                            */}
       {/* ============================================================ */}
-      <section className="relative pt-24 sm:pt-28 pb-8 px-4 sm:px-6">
+      <section id="demo" className="relative pt-24 sm:pt-28 pb-8 px-4 sm:px-6">
         {/* Subtle radial gradient background */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(168,85,247,0.04)_0%,_transparent_70%)]" />
 
