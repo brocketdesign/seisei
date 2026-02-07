@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Users,
   Megaphone,
+  Share2,
   Settings,
   LogOut,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ const navItems = [
   { href: '/dashboard/generate', icon: ImageIcon, label: '画像生成' },
   { href: '/dashboard/models', icon: Users, label: 'モデル管理' },
   { href: '/dashboard/campaigns', icon: Megaphone, label: 'キャンペーン' },
+  { href: '/dashboard/social', icon: Share2, label: 'ソーシャル' },
   { href: '/dashboard/settings', icon: Settings, label: '設定' },
 ];
 
