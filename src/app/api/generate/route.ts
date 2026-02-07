@@ -144,6 +144,7 @@ export async function POST(request: NextRequest) {
                     // ── Step 3: Face swap for consistency ──
                     // Use the model's avatar as the source face (reference face)
                     // and swap it onto the generated model image
+                    // The avatar URL is already a public Supabase Storage URL
                     const modelAvatarUrl = modelData?.avatar;
 
                     let faceSwappedModelUrl = generatedModelUrl;
@@ -152,8 +153,8 @@ export async function POST(request: NextRequest) {
                         await sendEvent('step', { step: 3, total: 4, message: 'フェイススワップ処理中...' });
 
                         try {
-                            // source_image = the reference face (model avatar)
-                            // target_image = the generated model image to swap face onto
+                            // source_image = the reference face (model avatar, already a public URL)
+                            // target_image = the generated model image (already a public URL)
                             const faceSwapResult = await segmind.faceSwap({
                                 source_image: modelAvatarUrl,
                                 target_image: generatedModelUrl,

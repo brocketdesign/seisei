@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 import { createClient } from '@/utils/supabase/client';
-import { AIModel, initialModels } from '@/types/models';
+import { AIModel } from '@/types/models';
 
 type Campaign = {
   id: string;
@@ -74,11 +74,12 @@ export default function GeneratePage() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Models from roster (only active ones)
-  const activeModels = initialModels.filter(m => m.isActive);
+  // Models loaded from database
+  const [activeModels, setActiveModels] = useState<AIModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
 
   // Generation settings
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(activeModels[0]?.id ?? null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const selectedModel = activeModels.find(m => m.id === selectedModelId) ?? activeModels[0] ?? null;
   const [background, setBackground] = useState('スタジオ（白背景）');
   const [aspectRatio, setAspectRatio] = useState('1:1');
@@ -115,6 +116,42 @@ export default function GeneratePage() {
       }
     }
     loadHistory();
+  }, []);
+
+  // --- Fetch AI models from Supabase ---
+  useEffect(() => {
+    const fetchModels = async () => {
+      setModelsLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setModelsLoading(false); return; }
+
+      const { data } = await supabase
+        .from('ai_models')
+        .select('id, name, thumbnail_url, type, model_data')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (data && data.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped: AIModel[] = (data as any[])
+          .filter(m => m.model_data?.isActive !== false)
+          .map(m => ({
+            id: m.id,
+            name: m.name,
+            avatar: m.thumbnail_url || '',
+            tags: m.model_data?.tags || [],
+            isActive: m.model_data?.isActive ?? true,
+            bodyType: m.model_data?.bodyType || 'Slim',
+            isLocked: m.model_data?.isLocked ?? false,
+            age: m.model_data?.age,
+            ethnicity: m.model_data?.ethnicity,
+          }));
+        setActiveModels(mapped);
+        if (mapped.length > 0) setSelectedModelId(mapped[0].id);
+      }
+      setModelsLoading(false);
+    };
+    fetchModels();
   }, []);
 
   // --- Fetch campaigns from Supabase ---
@@ -312,12 +349,8 @@ export default function GeneratePage() {
 
       setGenerationStep('AIモデル画像を生成中...');
 
-      // Build the model avatar URL for face swap
-      // The avatar is a relative path like /models/yuki.jpg — make it absolute
-      let modelAvatarUrl: string | undefined;
-      if (selectedModel?.avatar) {
-        modelAvatarUrl = `${window.location.origin}${selectedModel.avatar}`;
-      }
+      // The avatar URL is already a public Supabase Storage URL from the DB
+      const modelAvatarUrl = selectedModel?.avatar || undefined;
 
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -348,6 +381,7 @@ export default function GeneratePage() {
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let currentEvent = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -355,34 +389,45 @@ export default function GeneratePage() {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // Parse SSE events from the buffer
-        const lines = buffer.split('\n');
-        buffer = '';
+        // Only process complete lines (terminated by \n).
+        // The last chunk may split a data: line mid-JSON, so keep
+        // any trailing partial line in the buffer for the next read.
+        const lastNewline = buffer.lastIndexOf('\n');
+        if (lastNewline === -1) continue; // no complete line yet
 
-        let currentEvent = '';
+        const complete = buffer.substring(0, lastNewline);
+        buffer = buffer.substring(lastNewline + 1);
+
+        const lines = complete.split('\n');
+
         for (const line of lines) {
           if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7);
+            currentEvent = line.slice(7).trim();
           } else if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
+            let data: Record<string, unknown>;
+            try {
+              data = JSON.parse(line.slice(6));
+            } catch {
+              console.error('SSE JSON parse failed, skipping line');
+              continue;
+            }
 
             if (currentEvent === 'step') {
-              setCurrentStepNum(data.step);
-              if (data.total > 0) setTotalSteps(data.total);
-              setGenerationStep(data.message);
+              setCurrentStepNum(data.step as number);
+              if ((data.total as number) > 0) setTotalSteps(data.total as number);
+              setGenerationStep(data.message as string);
             } else if (currentEvent === 'complete') {
-              setGeneratedImage(data.image);
-              const historyImage = data.imageUrl || data.image;
-              setHistory(prev => [{ id: data.generation?.id, image: historyImage, createdAt: new Date().toISOString() }, ...prev].slice(0, 10));
+              setGeneratedImage(data.image as string);
+              const historyImage = (data.imageUrl || data.image) as string;
+              const gen = data.generation as { id?: string } | null;
+              setHistory(prev => [{ id: gen?.id, image: historyImage, createdAt: new Date().toISOString() }, ...prev].slice(0, 10));
               setGenerationStep('');
             } else if (currentEvent === 'error') {
-              throw new Error(data.error || '生成に失敗しました。');
+              throw new Error((data.error as string) || '生成に失敗しました。');
             }
             currentEvent = '';
-          } else if (line !== '') {
-            // Incomplete line, put it back in the buffer
-            buffer += line + '\n';
           }
+          // Empty lines (SSE event separators) are simply skipped
         }
       }
     } catch (err) {
@@ -784,17 +829,24 @@ export default function GeneratePage() {
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1.5 block">アスペクト比</label>
                 <div className="flex gap-2">
-                  {['1:1', '4:5', '9:16'].map(r => (
+                  {([
+                    { value: '1:1', label: 'スクエア', width: 'w-6', height: 'h-6' },
+                    { value: '4:5', label: 'ポートレート', width: 'w-5', height: 'h-6' },
+                    { value: '9:16', label: 'ストーリー', width: 'w-[14px]', height: 'h-6' },
+                  ] as const).map(r => (
                     <button
-                      key={r}
-                      onClick={() => setAspectRatio(r)}
-                      className={`flex-1 py-2 text-xs border rounded-lg transition-colors ${
-                        aspectRatio === r
+                      key={r.value}
+                      onClick={() => setAspectRatio(r.value)}
+                      className={`flex-1 py-2.5 flex flex-col items-center gap-1.5 border rounded-lg transition-colors ${
+                        aspectRatio === r.value
                           ? 'border-black bg-black text-white'
-                          : 'border-gray-200 hover:border-black bg-white'
+                          : 'border-gray-200 hover:border-black bg-white text-gray-700'
                       }`}
                     >
-                      {r}
+                      <div className={`${r.width} ${r.height} rounded-sm border-2 ${
+                        aspectRatio === r.value ? 'border-white' : 'border-gray-400'
+                      }`} />
+                      <span className="text-[10px] font-medium leading-none">{r.label}</span>
                     </button>
                   ))}
                 </div>

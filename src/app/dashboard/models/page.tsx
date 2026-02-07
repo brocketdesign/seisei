@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Plus, 
@@ -18,13 +18,16 @@ import {
   User
 } from 'lucide-react';
 
-import { AIModel, initialModels } from '@/types/models';
+import { AIModel } from '@/types/models';
+import { createClient } from '@/utils/supabase/client';
 
 type Model = AIModel;
 
 export default function ModelsPage() {
+  const supabase = createClient();
   const [view, setView] = useState<'roster' | 'add' | 'details'>('roster');
-  const [models, setModels] = useState<Model[]>(initialModels);
+  const [models, setModels] = useState<Model[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
 
   // Filter State
@@ -39,9 +42,60 @@ export default function ModelsPage() {
     tags: []
   });
 
-  // Toggle Active Status
-  const toggleActive = (id: string) => {
-    setModels(models.map(m => m.id === id ? { ...m, isActive: !m.isActive } : m));
+  // Load models from Supabase on mount
+  useEffect(() => {
+    const fetchModels = async () => {
+      setModelsLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setModelsLoading(false); return; }
+
+      const { data } = await supabase
+        .from('ai_models')
+        .select('id, name, thumbnail_url, type, model_data')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+
+      if (data && data.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mapped: Model[] = (data as any[]).map(m => ({
+          id: m.id,
+          name: m.name,
+          avatar: m.thumbnail_url || '',
+          tags: m.model_data?.tags || [],
+          isActive: m.model_data?.isActive ?? true,
+          bodyType: m.model_data?.bodyType || 'Slim',
+          isLocked: m.model_data?.isLocked ?? false,
+          age: m.model_data?.age,
+          ethnicity: m.model_data?.ethnicity,
+        }));
+        setModels(mapped);
+      }
+      setModelsLoading(false);
+    };
+    fetchModels();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Toggle Active Status (persists to DB)
+  const toggleActive = async (id: string) => {
+    const model = models.find(m => m.id === id);
+    if (!model) return;
+    const newIsActive = !model.isActive;
+    setModels(models.map(m => m.id === id ? { ...m, isActive: newIsActive } : m));
+
+    // Update in Supabase
+    const { data: existing } = await supabase
+      .from('ai_models')
+      .select('model_data')
+      .eq('id', id)
+      .single();
+
+    if (existing) {
+      await supabase
+        .from('ai_models')
+        .update({ model_data: { ...existing.model_data, isActive: newIsActive } })
+        .eq('id', id);
+    }
   };
 
   // Handle Model Click
