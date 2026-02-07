@@ -39,7 +39,8 @@ export default function ModelsPage() {
     name: '',
     bodyType: 'Slim',
     isLocked: false,
-    tags: []
+    tags: [],
+    sex: 'female'
   });
 
   // Load models from Supabase on mount
@@ -67,6 +68,7 @@ export default function ModelsPage() {
           isLocked: m.model_data?.isLocked ?? false,
           age: m.model_data?.age,
           ethnicity: m.model_data?.ethnicity,
+          sex: m.model_data?.sex || 'female',
         }));
         setModels(mapped);
       }
@@ -91,9 +93,10 @@ export default function ModelsPage() {
       .single();
 
     if (existing) {
+      const currentModelData = (existing.model_data as Record<string, any>) || {};
       await supabase
         .from('ai_models')
-        .update({ model_data: { ...existing.model_data, isActive: newIsActive } })
+        .update({ model_data: { ...currentModelData, isActive: newIsActive } })
         .eq('id', id);
     }
   };
@@ -108,7 +111,7 @@ export default function ModelsPage() {
   const handleBack = () => {
     setView('roster');
     setSelectedModel(null);
-    setNewModel({ name: '', bodyType: 'Slim', isLocked: false, tags: [] });
+    setNewModel({ name: '', bodyType: 'Slim', isLocked: false, tags: [], sex: 'female' });
   };
 
   return (
@@ -267,7 +270,7 @@ function RosterView({
                   {model.isLocked ? <Lock size={12} /> : <Unlock size={12} />}
                   {model.isLocked ? '顔固定ON' : '顔固定OFF'}
                 </span>
-                <span>{model.bodyType}</span>
+                <span>{model.sex === 'male' ? '男性' : '女性'} · {model.bodyType}</span>
               </div>
             </div>
           </div>
@@ -341,6 +344,13 @@ function AddModelView({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">性別 (Sex)</label>
+                  <select className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none">
+                    <option value="female">女性 (Female)</option>
+                    <option value="male">男性 (Male)</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">年齢</label>
                   <input type="number" defaultValue={24} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none" />
@@ -428,6 +438,25 @@ function ModelDetailsView({
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
                 className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black/10 outline-none font-medium" 
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-1">性別 (Sex)</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['female', 'male'] as const).map(sex => (
+                  <button
+                    key={sex}
+                    onClick={() => setFormData({...formData, sex})}
+                    className={`py-2 rounded-lg text-sm border transition-all ${
+                      formData.sex === sex 
+                        ? 'border-black bg-black text-white' 
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {sex === 'female' ? '女性 (Female)' : '男性 (Male)'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
