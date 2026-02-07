@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check,
@@ -21,9 +22,9 @@ import {
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-type Step = 'brand' | 'product' | 'style' | 'platform' | 'plan';
+type Step = 'welcome' | 'brand' | 'product' | 'style' | 'platform' | 'plan';
 
-const STEPS: Step[] = ['brand', 'product', 'style', 'platform', 'plan'];
+const STEPS: Step[] = ['welcome', 'brand', 'product', 'style', 'platform', 'plan'];
 
 interface BrandInfo {
   name: string;
@@ -81,8 +82,21 @@ const staggerItem = {
 
 export default function Onboarding() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>('brand');
+  const [step, setStep] = useState<Step>('welcome');
   const [direction, setDirection] = useState(1);
+  const [welcomeDone, setWelcomeDone] = useState(false);
+
+  // Auto-advance from welcome after 3.5s
+  useEffect(() => {
+    if (step === 'welcome' && !welcomeDone) {
+      const timer = setTimeout(() => {
+        setWelcomeDone(true);
+        setDirection(1);
+        setStep('brand');
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [step, welcomeDone]);
 
   // Step 1 – Brand
   const [brand, setBrand] = useState<BrandInfo>({ name: '', website: '', description: '' });
@@ -139,6 +153,20 @@ export default function Onboarding() {
     { id: 'enterprise', label: '500枚以上/月' },
   ];
 
+  // Style preview image mapping
+  const styleImages: Record<string, string> = {
+    minimal: '/styles/minimal.webp',
+    street: '/styles/street.webp',
+    casual: '/styles/casual.webp',
+    luxury: '/styles/luxury.webp',
+    mode: '/styles/mode.webp',
+    fem: '/styles/fem.webp',
+  };
+
+  // Currently hovered/selected style for background preview
+  const [previewStyle, setPreviewStyle] = useState<string | null>(null);
+  const activePreviewStyle = previewStyle || (selectedStyles.length > 0 ? selectedStyles[selectedStyles.length - 1] : null);
+
   const styles = [
     { id: 'minimal', label: 'ミニマル', desc: 'シンプルで洗練された' },
     { id: 'street', label: 'ストリート', desc: '都会的で大胆な' },
@@ -191,6 +219,8 @@ export default function Onboarding() {
 
   const canProceed = useCallback((): boolean => {
     switch (step) {
+      case 'welcome':
+        return true;
       case 'brand':
         return brand.name.trim().length > 0;
       case 'product':
@@ -225,13 +255,89 @@ export default function Onboarding() {
   /* ---- Render ---- */
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col relative">
+
+      {/* ============================================ */}
+      {/* Welcome Screen (full-page overlay)            */}
+      {/* ============================================ */}
+      <AnimatePresence>
+        {step === 'welcome' && (
+          <motion.div
+            key="welcome-overlay"
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease }}
+            className="fixed inset-0 z-50 bg-black flex items-center justify-center"
+          >
+            {/* Ambient glow */}
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(168,85,247,0.15)_0%,_transparent_60%)]" />
+
+            <div className="relative text-center px-6">
+              {/* Logo breathing animation */}
+              <motion.div
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="mb-8"
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+                  className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/10"
+                >
+                  <Sparkles className="w-8 h-8 text-white" />
+                </motion.div>
+              </motion.div>
+
+              {/* Brand name */}
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.7, ease }}
+                className="text-4xl sm:text-5xl font-black text-white tracking-tighter mb-4"
+              >
+                生成
+              </motion.h1>
+
+              {/* Manifesto text */}
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8, duration: 0.7, ease }}
+                className="text-white/40 text-sm sm:text-base leading-relaxed max-w-md mx-auto"
+              >
+                あなたのブランドイメージを、<br />
+                AIの力で再定義します。
+              </motion.p>
+
+              {/* Subtle loading indicator */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5, duration: 0.5 }}
+                className="mt-10"
+              >
+                <motion.div
+                  className="w-12 h-[2px] bg-white/20 rounded-full mx-auto overflow-hidden"
+                >
+                  <motion.div
+                    className="h-full bg-white/60 rounded-full"
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '100%' }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                </motion.div>
+              </motion.div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="px-8 py-6 border-b border-gray-100 bg-white">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="font-bold text-xl tracking-tighter">生成</div>
           <div className="text-sm text-gray-400">
-            Step {currentIndex + 1} / {STEPS.length}
+            {step === 'welcome' ? '' : `Step ${currentIndex} / ${STEPS.length - 1}`}
           </div>
         </div>
       </header>
@@ -241,7 +347,7 @@ export default function Onboarding() {
         <motion.div
           className="h-full bg-black"
           initial={false}
-          animate={{ width: `${((currentIndex + 1) / STEPS.length) * 100}%` }}
+          animate={{ width: `${(Math.max(0, currentIndex) / (STEPS.length - 1)) * 100}%` }}
           transition={{ duration: 0.5, ease }}
         />
       </div>
@@ -447,7 +553,7 @@ export default function Onboarding() {
             )}
 
             {/* ============================================ */}
-            {/* Step 3: Style Selection                       */}
+            {/* Step 3: Style Selection (with visual previews) */}
             {/* ============================================ */}
             {step === 'style' && (
               <motion.div
@@ -459,7 +565,30 @@ export default function Onboarding() {
                 exit="exit"
                 className="space-y-8"
               >
-                <div className="text-center space-y-2 mb-10">
+                {/* Background image preview — fades when style is hovered/selected */}
+                <AnimatePresence mode="wait">
+                  {activePreviewStyle && styleImages[activePreviewStyle] && (
+                    <motion.div
+                      key={activePreviewStyle}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.5 }}
+                      className="fixed inset-0 z-0 pointer-events-none"
+                    >
+                      <Image
+                        src={styleImages[activePreviewStyle]}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        priority
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-b from-gray-50/90 via-gray-50/70 to-gray-50/95" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="text-center space-y-2 mb-10 relative z-10">
                   <motion.div
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -476,36 +605,62 @@ export default function Onboarding() {
                   variants={staggerContainer}
                   initial="enter"
                   animate="center"
-                  className="grid grid-cols-2 md:grid-cols-3 gap-4"
+                  className="grid grid-cols-2 md:grid-cols-3 gap-4 relative z-10"
                 >
-                  {styles.map((s) => (
-                    <motion.button
-                      key={s.id}
-                      variants={staggerItem}
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => setSelectedStyles(toggle(selectedStyles, s.id))}
-                      className={`p-6 text-left border rounded-lg transition-colors duration-200 ${
-                        selectedStyles.includes(s.id)
-                          ? 'border-black bg-black text-white'
-                          : 'border-gray-200 bg-white hover:border-black'
-                      }`}
-                    >
-                      <div className="text-lg font-medium mb-1">{s.label}</div>
-                      <div className={`text-xs ${selectedStyles.includes(s.id) ? 'text-gray-300' : 'text-gray-500'}`}>
-                        {s.desc}
-                      </div>
-                      {selectedStyles.includes(s.id) && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          className="mt-3"
-                        >
-                          <Check className="w-4 h-4" />
-                        </motion.div>
-                      )}
-                    </motion.button>
-                  ))}
+                  {styles.map((s) => {
+                    const isSelected = selectedStyles.includes(s.id);
+                    return (
+                      <motion.button
+                        key={s.id}
+                        variants={staggerItem}
+                        whileHover={{ y: -4 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setSelectedStyles(toggle(selectedStyles, s.id))}
+                        onMouseEnter={() => setPreviewStyle(s.id)}
+                        onMouseLeave={() => setPreviewStyle(null)}
+                        className={`relative overflow-hidden rounded-xl border-2 transition-all duration-300 group ${
+                          isSelected
+                            ? 'border-black ring-2 ring-black/10'
+                            : 'border-gray-200 hover:border-gray-400'
+                        }`}
+                      >
+                        {/* Style preview image */}
+                        <div className="relative aspect-[3/4] overflow-hidden">
+                          <Image
+                            src={styleImages[s.id]}
+                            alt={s.label}
+                            fill
+                            className={`object-cover transition-transform duration-500 ${
+                              isSelected ? 'scale-105' : 'group-hover:scale-105'
+                            }`}
+                          />
+                          {/* Dark overlay */}
+                          <div className={`absolute inset-0 transition-colors duration-300 ${
+                            isSelected
+                              ? 'bg-black/40'
+                              : 'bg-black/20 group-hover:bg-black/30'
+                          }`} />
+
+                          {/* Selected check badge */}
+                          {isSelected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              className="absolute top-3 right-3 w-7 h-7 bg-white rounded-full flex items-center justify-center shadow-lg"
+                            >
+                              <Check className="w-4 h-4 text-black" />
+                            </motion.div>
+                          )}
+
+                          {/* Label overlay at bottom */}
+                          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent">
+                            <p className="text-white text-base font-bold">{s.label}</p>
+                            <p className="text-white/60 text-xs">{s.desc}</p>
+                          </div>
+                        </div>
+                      </motion.button>
+                    );
+                  })}
                 </motion.div>
               </motion.div>
             )}
