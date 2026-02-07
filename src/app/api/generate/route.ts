@@ -93,7 +93,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Save generation to database
-        const { data: generation, error: dbError } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: generation, error: dbError } = await (supabase as any)
             .from('generations')
             .insert({
                 user_id: user.id,

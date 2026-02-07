@@ -31,3 +31,13 @@ h1, h2, h3, h4 {
 .rounded-xl {
   border-radius: 0.75rem;
 }
+
+/* Animated dashed line for hero flow */
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.animate-dash {
+  animation: dash-flow 1.5s linear infinite;
+}
