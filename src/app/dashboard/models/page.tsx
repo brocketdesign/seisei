@@ -32,9 +32,10 @@ type Model = {
 };
 
 const initialModels: Model[] = [
-  { id: '1', name: 'Yuki', avatar: 'bg-pink-200', tags: ['Cute', 'Casual'], isActive: true, bodyType: 'Slim', isLocked: true, age: 22, ethnicity: 'Japanese' },
-  { id: '2', name: 'Aoi', avatar: 'bg-blue-200', tags: ['Cool', 'Street'], isActive: false, bodyType: 'Athletic', isLocked: false, age: 25, ethnicity: 'Japanese' },
-  { id: '3', name: 'Rina', avatar: 'bg-purple-200', tags: ['Elegant', 'Formal'], isActive: true, bodyType: 'Curvy', isLocked: true, age: 28, ethnicity: 'Japanese' },
+  { id: '1', name: 'Yuki', avatar: '/models/yuki.jpg', tags: ['Cute', 'Casual'], isActive: true, bodyType: 'Slim', isLocked: true, age: 22, ethnicity: 'Japanese' },
+  { id: '2', name: 'Aoi', avatar: '/models/aoi.jpg', tags: ['Cool', 'Street'], isActive: false, bodyType: 'Athletic', isLocked: false, age: 25, ethnicity: 'Japanese' },
+  { id: '3', name: 'Rina', avatar: '/models/rina.jpg', tags: ['Elegant', 'Formal'], isActive: true, bodyType: 'Curvy', isLocked: true, age: 28, ethnicity: 'Japanese' },
+  { id: '4', name: 'Hana', avatar: '/models/hana.jpg', tags: ['Modern', 'Vibrant'], isActive: true, bodyType: 'Slim', isLocked: false, age: 20, ethnicity: 'Japanese' },
 ];
 
 export default function ModelsPage() {
@@ -185,9 +186,13 @@ function RosterView({
             className="group bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer"
             onClick={() => onModelClick(model)}
           >
-            <div className={`h-48 w-full ${model.avatar} relative flex items-center justify-center`}>
-              {/* Avatar Placeholder */}
-              <User size={48} className="text-white/50" />
+            <div className={`h-64 w-full relative flex items-center justify-center bg-gray-100`}>
+              {/* Avatar Image */}
+              <img 
+                src={model.avatar} 
+                alt={model.name}
+                className="w-full h-full object-cover"
+              />
               
               <div className="absolute top-3 right-3">
                 <button 
