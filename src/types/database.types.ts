@@ -58,6 +58,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             }
             checkout_sessions: {
                 Row: {
@@ -84,6 +85,7 @@ export interface Database {
                     processed?: boolean
                     created_at?: string
                 }
+                Relationships: []
             }
             campaigns: {
                 Row: {
@@ -113,6 +115,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             }
             generations: {
                 Row: {
@@ -151,6 +154,7 @@ export interface Database {
                     status?: 'pending' | 'processing' | 'completed' | 'failed'
                     created_at?: string
                 }
+                Relationships: []
             }
             ai_models: {
                 Row: {
@@ -180,6 +184,7 @@ export interface Database {
                     model_data?: Json | null
                     created_at?: string
                 }
+                Relationships: []
             }
             products: {
                 Row: {
@@ -221,6 +226,7 @@ export interface Database {
                     created_at?: string
                     updated_at?: string
                 }
+                Relationships: []
             }
         }
         Views: {
