@@ -73,26 +73,26 @@ export default function ModelsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-8 font-sans">
+    <>
       {/* Header */}
       <header className="mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">所属モデル管理</h1>
+          <h2 className="text-2xl font-bold text-gray-900">モデル管理</h2>
           <p className="text-gray-500 mt-1 text-sm">専属モデルの登録・編集・管理を行います</p>
         </div>
         {view === 'roster' && (
           <button 
             onClick={() => setView('add')}
-            className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-full hover:bg-gray-800 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-lg hover:bg-gray-800 transition-colors shadow-lg shadow-black/10 text-sm font-medium"
           >
-            <Plus size={18} />
-            <span className="font-medium">モデルを追加</span>
+            <Plus size={16} />
+            <span>モデルを追加</span>
           </button>
         )}
       </header>
 
       {/* Main Content Area */}
-      <main>
+      <div>
         {view === 'roster' && (
           <RosterView 
             models={models} 
@@ -123,8 +123,8 @@ export default function ModelsPage() {
             }}
           />
         )}
-      </main>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -182,7 +182,7 @@ function RosterView({
         {filteredModels.map(model => (
           <div 
             key={model.id} 
-            className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer"
+            className="group bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer"
             onClick={() => onModelClick(model)}
           >
             <div className={`h-48 w-full ${model.avatar} relative flex items-center justify-center`}>
@@ -234,7 +234,7 @@ function RosterView({
         {filteredModels.length === 0 && (
             <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
                 <Users size={48} className="mb-4 opacity-20" />
-                <p>モデルが見つかりません</p>
+                <p className="text-sm">モデルが見つかりません</p>
             </div>
         )}
       </div>
@@ -263,7 +263,7 @@ function AddModelView({
         <span className="text-black font-medium">新規登録</span>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="border-b border-gray-100 flex">
           <button 
             onClick={() => setMode('upload')}
@@ -318,7 +318,7 @@ function AddModelView({
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none h-24 resize-none"
                   ></textarea>
                 </div>
-                <button className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2">
+                <button className="w-full py-3 bg-black text-white rounded-lg font-medium shadow-lg shadow-black/10 hover:bg-gray-800 transition-all flex items-center justify-center gap-2">
                   <Sparkles size={18} />
                   プレビューを生成
                 </button>
@@ -335,8 +335,8 @@ function AddModelView({
         
         {/* Footer Actions */}
         <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
-            <button onClick={onBack} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition-colors">キャンセル</button>
-            <button className="px-5 py-2.5 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-lg">登録する</button>
+            <button onClick={onBack} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors">キャンセル</button>
+            <button className="px-5 py-2.5 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-lg shadow-black/10">登録する</button>
         </div>
       </div>
     </div>
@@ -362,11 +362,11 @@ function ModelDetailsView({
         <span className="text-black font-medium">{model.name}</span>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
         <div className="flex flex-col md:flex-row gap-8">
           {/* Avatar Section */}
           <div className="w-full md:w-1/3 flex flex-col items-center">
-            <div className={`w-48 h-48 ${formData.avatar} rounded-2xl mb-4 shadow-inner flex items-center justify-center text-white/50`}>
+            <div className={`w-48 h-48 ${formData.avatar} rounded-xl mb-4 shadow-inner flex items-center justify-center text-white/50`}>
                <User size={64} />
             </div>
             <button className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">
@@ -432,7 +432,7 @@ function ModelDetailsView({
                </button>
                <button 
                  onClick={() => onSave(formData)}
-                 className="px-6 py-2.5 rounded-lg bg-black text-white hover:bg-gray-800 font-medium transition-colors shadow-lg flex items-center gap-2"
+                 className="px-6 py-2.5 rounded-lg bg-black text-white hover:bg-gray-800 font-medium transition-colors shadow-lg shadow-black/10 flex items-center gap-2"
                >
                  <Check size={16} />
                  変更を保存
