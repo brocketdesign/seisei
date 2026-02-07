@@ -44,6 +44,21 @@ CREATE TABLE IF NOT EXISTS public.generations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Products table (for storing product images linked to campaigns)
+CREATE TABLE IF NOT EXISTS public.products (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  campaign_id UUID REFERENCES public.campaigns(id) ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  image_url TEXT NOT NULL,
+  category TEXT,
+  tags TEXT[],
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- AI Models table (for storing user's custom AI models)
 CREATE TABLE IF NOT EXISTS public.ai_models (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -60,6 +75,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.generations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_models ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
 DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
@@ -125,6 +141,23 @@ DROP POLICY IF EXISTS "Users can delete own models" ON public.ai_models;
 CREATE POLICY "Users can delete own models" ON public.ai_models
   FOR DELETE USING (auth.uid() = user_id);
 
+-- Products policies
+DROP POLICY IF EXISTS "Users can view own products" ON public.products;
+CREATE POLICY "Users can view own products" ON public.products
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can create own products" ON public.products;
+CREATE POLICY "Users can create own products" ON public.products
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own products" ON public.products;
+CREATE POLICY "Users can update own products" ON public.products
+  FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own products" ON public.products;
+CREATE POLICY "Users can delete own products" ON public.products
+  FOR DELETE USING (auth.uid() = user_id);
+
 -- Function to handle new user creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -161,6 +194,11 @@ CREATE TRIGGER update_campaigns_updated_at
   BEFORE UPDATE ON public.campaigns
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
+DROP TRIGGER IF EXISTS update_products_updated_at ON public.products;
+CREATE TRIGGER update_products_updated_at
+  BEFORE UPDATE ON public.products
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
 -- Checkout sessions table (for Stripe → Supabase auto-login bridge)
 CREATE TABLE IF NOT EXISTS public.checkout_sessions (
   session_id TEXT PRIMARY KEY,
@@ -181,4 +219,12 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_user_id ON public.campaigns(user_id);
 CREATE INDEX IF NOT EXISTS idx_generations_user_id ON public.generations(user_id);
 CREATE INDEX IF NOT EXISTS idx_generations_campaign_id ON public.generations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_ai_models_user_id ON public.ai_models(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_user_id ON public.products(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_campaign_id ON public.products(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_checkout_sessions_user_id ON public.checkout_sessions(user_id);
+
+-- Storage bucket for generation images (outfit uploads, generated model images)
+-- Run this in the Supabase SQL editor or via the dashboard:
+-- INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+-- VALUES ('generation-images', 'generation-images', true, 20971520, ARRAY['image/png', 'image/jpeg', 'image/webp'])
+-- ON CONFLICT (id) DO NOTHING;

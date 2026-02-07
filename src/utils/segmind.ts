@@ -10,9 +10,16 @@
 const SEGMIND_API_URL = 'https://api.segmind.com/v1';
 
 interface SegfitRequest {
-    model_image: string; // base64 or URL of model/person image
-    cloth_image: string; // base64 or URL of clothing image
-    category?: 'Upper-body' | 'Lower-body' | 'Dress';
+    outfit_image: string; // URL of clothing/outfit image
+    model_image: string;  // URL of model/person image
+    mask_image?: string;
+    model_type?: 'Quality' | 'Speed';
+    cn_strength?: number; // 0-1, default 0.8
+    cn_end?: number;      // 0-1, default 0.5
+    image_format?: 'png' | 'jpeg' | 'webp';
+    image_quality?: number; // 1-100, default 90
+    seed?: number;
+    base64?: boolean;
 }
 
 interface ZImageTurboRequest {
@@ -29,14 +36,37 @@ interface ZImageTurboRequest {
 }
 
 interface FaceswapRequest {
-    source_image: string; // base64 or URL - face to put
-    target_image: string; // base64 or URL - image to swap face onto
+    source_image: string; // URL of the face to put (reference face)
+    target_image: string; // URL of the image to swap face onto
+    additional_prompt?: string;
+    seed?: number;
+    image_format?: 'png' | 'jpeg' | 'webp';
+    quality?: number; // 10-100, default 95
 }
 
 interface SegmindResponse {
     image?: string; // base64 encoded image
     status?: string;
     error?: string;
+}
+
+/**
+ * Strip data URI prefix and fix base64 padding.
+ * Accepts both raw base64 and data URIs like "data:image/png;base64,ABC..."
+ */
+function sanitizeBase64(input: string): string {
+    // Strip data URI prefix if present
+    let raw = input;
+    const match = raw.match(/^data:[^;]+;base64,(.*)$/);
+    if (match) {
+        raw = match[1];
+    }
+    // Fix padding: base64 length must be a multiple of 4
+    const remainder = raw.length % 4;
+    if (remainder === 2) raw += '==';
+    else if (remainder === 3) raw += '=';
+    else if (remainder === 1) raw = raw.slice(0, -1); // invalid char, trim
+    return raw;
 }
 
 class SegmindClient {
@@ -74,9 +104,16 @@ class SegmindClient {
      */
     async virtualTryOn(params: SegfitRequest): Promise<SegmindResponse> {
         return this.request('segfit-v1.3', {
+            outfit_image: params.outfit_image,
             model_image: params.model_image,
-            cloth_image: params.cloth_image,
-            category: params.category || 'Upper-body',
+            ...(params.mask_image && { mask_image: params.mask_image }),
+            model_type: params.model_type || 'Quality',
+            cn_strength: params.cn_strength ?? 0.8,
+            cn_end: params.cn_end ?? 0.5,
+            image_format: params.image_format ?? 'png',
+            image_quality: params.image_quality ?? 90,
+            seed: params.seed ?? 42,
+            base64: params.base64 ?? false,
         });
     }
 
@@ -99,11 +136,16 @@ class SegmindClient {
 
     /**
      * Face swap using Faceswap v5
+     * Both source_image and target_image must be URLs (not base64)
      */
     async faceSwap(params: FaceswapRequest): Promise<SegmindResponse> {
         return this.request('faceswap-v5', {
-            source_img: params.source_image,
-            target_img: params.target_image,
+            source_image: params.source_image,
+            target_image: params.target_image,
+            additional_prompt: params.additional_prompt ?? '',
+            seed: params.seed ?? 8005332,
+            image_format: params.image_format ?? 'png',
+            quality: params.quality ?? 95,
         });
     }
 }

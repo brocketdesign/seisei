@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -12,6 +12,8 @@ import {
   Settings,
   LogOut,
   Sparkles,
+  Building2,
+  Package,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -19,6 +21,7 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'ダッシュボード' },
   { href: '/dashboard/generate', icon: ImageIcon, label: '画像生成' },
   { href: '/dashboard/models', icon: Users, label: 'モデル管理' },
+  { href: '/dashboard/products', icon: Package, label: '商品管理' },
   { href: '/dashboard/campaigns', icon: Megaphone, label: 'キャンペーン' },
   { href: '/dashboard/social', icon: Share2, label: 'ソーシャル' },
   { href: '/dashboard/settings', icon: Settings, label: '設定' },
@@ -27,6 +30,27 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [brandName, setBrandName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchBrandName = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('brand_name')
+        .eq('id', user.id)
+        .single();
+
+      if (data?.brand_name) {
+        setBrandName(data.brand_name);
+      }
+    };
+
+    fetchBrandName();
+  }, []);
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -48,6 +72,20 @@ export default function Sidebar() {
           </div>
         </Link>
       </div>
+
+      {brandName && (
+        <div className="mx-4 mb-3 px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 bg-black/5 rounded-md flex items-center justify-center flex-shrink-0">
+              <Building2 className="w-3.5 h-3.5 text-gray-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-gray-400 leading-none mb-0.5">ブランド</p>
+              <p className="text-sm font-semibold text-gray-900 truncate">{brandName}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="flex-1 px-4 space-y-1">
         {navItems.map((item) => {

@@ -1,46 +1,86 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import {
   Megaphone,
   Plus,
   Calendar,
   BarChart3,
-  Eye,
   MoreHorizontal,
   Search,
   ArrowUpRight,
+  Loader2,
 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 type Campaign = {
   id: string;
   name: string;
-  status: 'active' | 'scheduled' | 'completed';
-  platform: string;
-  impressions: number;
-  startDate: string;
-  endDate: string;
+  status: 'active' | 'scheduled' | 'completed' | 'draft';
+  description: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-const mockCampaigns: Campaign[] = [
-  { id: '1', name: '春コレクション 2026', status: 'active', platform: '楽天市場', impressions: 12400, startDate: '2026-02-01', endDate: '2026-03-31' },
-  { id: '2', name: 'バレンタイン特集', status: 'active', platform: 'Instagram', impressions: 8200, startDate: '2026-02-01', endDate: '2026-02-14' },
-  { id: '3', name: '新作デニムライン', status: 'scheduled', platform: 'ZOZOTOWN', impressions: 0, startDate: '2026-03-01', endDate: '2026-04-30' },
-  { id: '4', name: '冬セール最終', status: 'completed', platform: 'Amazon', impressions: 45600, startDate: '2026-01-01', endDate: '2026-01-31' },
-];
-
-const statusLabels: Record<Campaign['status'], { label: string; style: string }> = {
+const statusLabels: Record<string, { label: string; style: string }> = {
   active: { label: '実施中', style: 'bg-green-50 text-green-700 border-green-200' },
   scheduled: { label: '予定', style: 'bg-blue-50 text-blue-700 border-blue-200' },
   completed: { label: '完了', style: 'bg-gray-100 text-gray-600 border-gray-200' },
+  draft: { label: '下書き', style: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
 };
 
 export default function CampaignsPage() {
-  const [filterStatus, setFilterStatus] = useState<'all' | Campaign['status']>('all');
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<'all' | string>('all');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newCampaignName, setNewCampaignName] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const filtered = mockCampaigns.filter(c =>
+  const supabase = createClient();
+
+  useEffect(() => {
+    const fetchCampaigns = async () => {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+
+      const { data } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      setCampaigns(data || []);
+      setLoading(false);
+    };
+    fetchCampaigns();
+  }, []);
+
+  const filtered = campaigns.filter(c =>
     filterStatus === 'all' ? true : c.status === filterStatus
   );
+
+  const handleCreateCampaign = async () => {
+    if (!newCampaignName.trim()) return;
+    setCreating(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setCreating(false); return; }
+
+    const { data, error } = await supabase
+      .from('campaigns')
+      .insert({ user_id: user.id, name: newCampaignName.trim(), status: 'draft' })
+      .select()
+      .single();
+
+    if (data && !error) {
+      setCampaigns(prev => [data, ...prev]);
+      setNewCampaignName('');
+      setShowCreateForm(false);
+    }
+    setCreating(false);
+  };
 
   return (
     <>
@@ -49,18 +89,56 @@ export default function CampaignsPage() {
           <h2 className="text-2xl font-bold text-gray-900">キャンペーン管理</h2>
           <p className="text-gray-500 text-sm mt-1">キャンペーンの作成・管理・パフォーマンスを確認します。</p>
         </div>
-        <button className="bg-black text-white px-5 py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 rounded-lg shadow-lg shadow-black/10">
+        <button
+          onClick={() => setShowCreateForm(true)}
+          className="bg-black text-white px-5 py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 rounded-lg shadow-lg shadow-black/10"
+        >
           <Plus className="w-4 h-4" />
           新規キャンペーン
         </button>
       </header>
 
+      {/* Create Campaign Inline Form */}
+      {showCreateForm && (
+        <div className="mb-6 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+          <h3 className="font-bold text-gray-900 text-sm mb-3">新規キャンペーンを作成</h3>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={newCampaignName}
+              onChange={(e) => setNewCampaignName(e.target.value)}
+              placeholder="キャンペーン名を入力..."
+              className="flex-1 p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none text-sm"
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateCampaign()}
+              autoFocus
+            />
+            <button
+              onClick={handleCreateCampaign}
+              disabled={creating || !newCampaignName.trim()}
+              className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                creating || !newCampaignName.trim()
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-black text-white hover:bg-gray-800'
+              }`}
+            >
+              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : '作成'}
+            </button>
+            <button
+              onClick={() => { setShowCreateForm(false); setNewCampaignName(''); }}
+              className="px-4 py-2.5 text-sm text-gray-500 hover:text-black hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Stats Row */}
       <div className="grid grid-cols-3 gap-6 mb-8">
         {[
-          { label: '実施中', value: mockCampaigns.filter(c => c.status === 'active').length, icon: Megaphone },
-          { label: '予定', value: mockCampaigns.filter(c => c.status === 'scheduled').length, icon: Calendar },
-          { label: '合計インプレッション', value: mockCampaigns.reduce((s, c) => s + c.impressions, 0).toLocaleString(), icon: BarChart3 },
+          { label: '実施中', value: campaigns.filter(c => c.status === 'active').length, icon: Megaphone },
+          { label: '予定', value: campaigns.filter(c => c.status === 'scheduled').length, icon: Calendar },
+          { label: '合計キャンペーン', value: campaigns.length, icon: BarChart3 },
         ].map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
             <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
@@ -90,6 +168,7 @@ export default function CampaignsPage() {
             { key: 'active', label: '実施中' },
             { key: 'scheduled', label: '予定' },
             { key: 'completed', label: '完了' },
+            { key: 'draft', label: '下書き' },
           ] as const).map(f => (
             <button
               key={f.key}
@@ -108,44 +187,57 @@ export default function CampaignsPage() {
 
       {/* Campaign List */}
       <div className="space-y-4">
-        {filtered.map(campaign => (
-          <div
-            key={campaign.id}
-            className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-gray-100 transition-colors">
-                  <Megaphone className="w-5 h-5 text-gray-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                    {campaign.name}
-                    <ArrowUpRight className="w-4 h-4 text-gray-300 group-hover:text-black transition-colors" />
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{campaign.platform} · {campaign.startDate} ~ {campaign.endDate}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className={`px-3 py-1 text-xs font-medium rounded-full border ${statusLabels[campaign.status].style}`}>
-                  {statusLabels[campaign.status].label}
-                </span>
-                <div className="flex items-center gap-1 text-sm text-gray-500">
-                  <Eye className="w-4 h-4" />
-                  {campaign.impressions.toLocaleString()}
-                </div>
-                <button className="p-2 text-gray-400 hover:text-black rounded-lg hover:bg-gray-50 transition-colors">
-                  <MoreHorizontal className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+        {loading ? (
+          <div className="py-16 flex flex-col items-center justify-center text-gray-400">
+            <Loader2 className="w-8 h-8 animate-spin mb-3 opacity-40" />
+            <p className="text-sm">読み込み中...</p>
           </div>
-        ))}
-
-        {filtered.length === 0 && (
+        ) : filtered.length > 0 ? (
+          filtered.map(campaign => (
+            <Link
+              key={campaign.id}
+              href={`/dashboard/campaigns/${campaign.id}`}
+              className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-all cursor-pointer group block"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-gray-100 transition-colors">
+                    <Megaphone className="w-5 h-5 text-gray-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                      {campaign.name}
+                      <ArrowUpRight className="w-4 h-4 text-gray-300 group-hover:text-black transition-colors" />
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      作成日: {new Date(campaign.created_at).toLocaleDateString('ja-JP')}
+                      {campaign.description && ` · ${campaign.description}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className={`px-3 py-1 text-xs font-medium rounded-full border ${(statusLabels[campaign.status] || statusLabels.draft).style}`}>
+                    {(statusLabels[campaign.status] || statusLabels.draft).label}
+                  </span>
+                  <button onClick={(e) => e.preventDefault()} className="p-2 text-gray-400 hover:text-black rounded-lg hover:bg-gray-50 transition-colors">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </Link>
+          ))
+        ) : (
           <div className="py-16 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
             <Megaphone size={48} className="mb-4 opacity-20" />
             <p className="text-sm">キャンペーンが見つかりません</p>
+            {campaigns.length === 0 && (
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="mt-3 text-xs bg-black text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-800 transition-colors"
+              >
+                最初のキャンペーンを作成
+              </button>
+            )}
           </div>
         )}
       </div>

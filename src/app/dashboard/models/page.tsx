@@ -18,25 +18,9 @@ import {
   User
 } from 'lucide-react';
 
-// Mock Data
-type Model = {
-  id: string;
-  name: string;
-  avatar: string; // Placeholder color or URL
-  tags: string[];
-  isActive: boolean;
-  bodyType: 'Slim' | 'Athletic' | 'Curvy';
-  isLocked: boolean;
-  age?: number;
-  ethnicity?: string;
-};
+import { AIModel, initialModels } from '@/types/models';
 
-const initialModels: Model[] = [
-  { id: '1', name: 'Yuki', avatar: '/models/yuki.jpg', tags: ['Cute', 'Casual'], isActive: true, bodyType: 'Slim', isLocked: true, age: 22, ethnicity: 'Japanese' },
-  { id: '2', name: 'Aoi', avatar: '/models/aoi.jpg', tags: ['Cool', 'Street'], isActive: false, bodyType: 'Athletic', isLocked: false, age: 25, ethnicity: 'Japanese' },
-  { id: '3', name: 'Rina', avatar: '/models/rina.jpg', tags: ['Elegant', 'Formal'], isActive: true, bodyType: 'Curvy', isLocked: true, age: 28, ethnicity: 'Japanese' },
-  { id: '4', name: 'Hana', avatar: '/models/hana.jpg', tags: ['Modern', 'Vibrant'], isActive: true, bodyType: 'Slim', isLocked: false, age: 20, ethnicity: 'Japanese' },
-];
+type Model = AIModel;
 
 export default function ModelsPage() {
   const [view, setView] = useState<'roster' | 'add' | 'details'>('roster');

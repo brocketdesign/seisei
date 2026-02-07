@@ -181,6 +181,47 @@ export interface Database {
                     created_at?: string
                 }
             }
+            products: {
+                Row: {
+                    id: string
+                    user_id: string
+                    campaign_id: string
+                    name: string
+                    description: string | null
+                    image_url: string
+                    category: string | null
+                    tags: string[] | null
+                    is_active: boolean
+                    created_at: string
+                    updated_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    campaign_id: string
+                    name: string
+                    description?: string | null
+                    image_url: string
+                    category?: string | null
+                    tags?: string[] | null
+                    is_active?: boolean
+                    created_at?: string
+                    updated_at?: string
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    campaign_id?: string
+                    name?: string
+                    description?: string | null
+                    image_url?: string
+                    category?: string | null
+                    tags?: string[] | null
+                    is_active?: boolean
+                    created_at?: string
+                    updated_at?: string
+                }
+            }
         }
         Views: {
             [_ in never]: never

@@ -4,9 +4,13 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
 // Use service role key for admin operations
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceRoleKey) {
+    console.warn('[webhook] WARNING: SUPABASE_SERVICE_ROLE_KEY is not set. Webhook will fail to create users.');
+}
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
@@ -54,12 +58,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         throw new Error('No customer email found in session');
     }
 
-    console.log('Processing checkout for:', customerEmail);
+    if (!serviceRoleKey) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured — cannot create users');
+    }
+
+    console.log('[webhook] Processing checkout for:', customerEmail);
 
     // Generate a temporary password
     const tempPassword = generateTempPassword();
 
     // Create user in Supabase Auth
+    console.log('[webhook] Creating user in Supabase Auth...');
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: customerEmail,
         password: tempPassword,
@@ -74,14 +83,28 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     if (authError) {
         // If user already exists, update their profile instead
         if (authError.message?.includes('already been registered')) {
-            console.log('User already exists, updating profile...');
+            console.log('[webhook] User already exists, updating profile...');
             const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
             const user = existingUser?.users?.find(u => u.email === customerEmail);
             if (user) {
                 await updateUserProfile(user.id, metadata);
+                // Still store checkout session for auto-login
+                await supabaseAdmin.from('checkout_sessions').upsert({
+                    session_id: session.id,
+                    user_id: user.id,
+                    email: customerEmail,
+                    temp_password: tempPassword,
+                    processed: true,
+                    created_at: new Date().toISOString(),
+                });
+                // Update their password so auto-login works
+                await supabaseAdmin.auth.admin.updateUserById(user.id, {
+                    password: tempPassword,
+                });
             }
             return;
         }
+        console.error('[webhook] Auth error:', authError);
         throw authError;
     }
 
@@ -89,20 +112,32 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         throw new Error('Failed to create user');
     }
 
+    console.log('[webhook] User created:', authData.user.id);
+
+    // Wait briefly for the handle_new_user trigger to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     // Update user profile with onboarding data
+    console.log('[webhook] Updating profile...');
     await updateUserProfile(authData.user.id, metadata);
 
     // Store the session info for auto-login
-    await supabaseAdmin.from('checkout_sessions').upsert({
+    console.log('[webhook] Storing checkout session...');
+    const { error: sessionError } = await supabaseAdmin.from('checkout_sessions').upsert({
         session_id: session.id,
         user_id: authData.user.id,
         email: customerEmail,
         temp_password: tempPassword,
         processed: true,
         created_at: new Date().toISOString(),
-    }).select();
+    });
 
-    console.log('User created successfully:', authData.user.id);
+    if (sessionError) {
+        console.error('[webhook] Error storing checkout session:', sessionError);
+        throw sessionError;
+    }
+
+    console.log('[webhook] Checkout completed successfully for:', authData.user.id);
 }
 
 async function updateUserProfile(userId: string, metadata: Record<string, string>) {
