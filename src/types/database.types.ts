@@ -59,6 +59,32 @@ export interface Database {
                     updated_at?: string
                 }
             }
+            checkout_sessions: {
+                Row: {
+                    session_id: string
+                    user_id: string | null
+                    email: string
+                    temp_password: string
+                    processed: boolean
+                    created_at: string
+                }
+                Insert: {
+                    session_id: string
+                    user_id?: string | null
+                    email: string
+                    temp_password: string
+                    processed?: boolean
+                    created_at?: string
+                }
+                Update: {
+                    session_id?: string
+                    user_id?: string | null
+                    email?: string
+                    temp_password?: string
+                    processed?: boolean
+                    created_at?: string
+                }
+            }
             campaigns: {
                 Row: {
                     id: string

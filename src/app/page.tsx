@@ -442,10 +442,10 @@ export default function Home() {
             プロ品質のファッション画像を体験できます。
           </p>
           <Link
-            href="/signup"
+            href="/onboarding"
             className="inline-flex items-center gap-2 bg-black text-white h-14 px-10 rounded-xl text-base font-bold hover:bg-gray-800 transition-all shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/20"
           >
-            無料アカウントを作成
+            アカウントを作成
             <ArrowRight className="w-5 h-5" />
           </Link>
         </motion.div>

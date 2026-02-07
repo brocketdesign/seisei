@@ -6,6 +6,8 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { planId, onboardingData } = body;
 
+        console.log('[checkout] Plan selected:', planId);
+
         // Validate plan
         const plan = PLAN_PRICES[planId];
         if (!plan) {
@@ -40,9 +42,6 @@ export async function POST(request: NextRequest) {
                     quantity: 1,
                 },
             ],
-            // Collect customer email for account creation
-            customer_creation: 'always',
-            customer_email: undefined, // Let customer enter email in Checkout
             // Store onboarding data in metadata for webhook
             metadata: {
                 planId,
@@ -61,6 +60,7 @@ export async function POST(request: NextRequest) {
             allow_promotion_codes: true,
         });
 
+        console.log('[checkout] Stripe session created:', session.id, session.url);
         return NextResponse.json({ sessionUrl: session.url });
     } catch (error) {
         console.error('Stripe checkout error:', error);

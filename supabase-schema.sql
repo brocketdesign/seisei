@@ -62,51 +62,66 @@ ALTER TABLE public.generations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_models ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile" ON public.profiles
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles
   FOR UPDATE USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
 CREATE POLICY "Users can insert own profile" ON public.profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Campaigns policies
+DROP POLICY IF EXISTS "Users can view own campaigns" ON public.campaigns;
 CREATE POLICY "Users can view own campaigns" ON public.campaigns
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create own campaigns" ON public.campaigns;
 CREATE POLICY "Users can create own campaigns" ON public.campaigns
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own campaigns" ON public.campaigns;
 CREATE POLICY "Users can update own campaigns" ON public.campaigns
   FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own campaigns" ON public.campaigns;
 CREATE POLICY "Users can delete own campaigns" ON public.campaigns
   FOR DELETE USING (auth.uid() = user_id);
 
 -- Generations policies
+DROP POLICY IF EXISTS "Users can view own generations" ON public.generations;
 CREATE POLICY "Users can view own generations" ON public.generations
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create own generations" ON public.generations;
 CREATE POLICY "Users can create own generations" ON public.generations
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own generations" ON public.generations;
 CREATE POLICY "Users can update own generations" ON public.generations
   FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own generations" ON public.generations;
 CREATE POLICY "Users can delete own generations" ON public.generations
   FOR DELETE USING (auth.uid() = user_id);
 
 -- AI Models policies
+DROP POLICY IF EXISTS "Users can view own models" ON public.ai_models;
 CREATE POLICY "Users can view own models" ON public.ai_models
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create own models" ON public.ai_models;
 CREATE POLICY "Users can create own models" ON public.ai_models
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own models" ON public.ai_models;
 CREATE POLICY "Users can update own models" ON public.ai_models
   FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own models" ON public.ai_models;
 CREATE POLICY "Users can delete own models" ON public.ai_models
   FOR DELETE USING (auth.uid() = user_id);
 
@@ -136,16 +151,34 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
+DROP TRIGGER IF EXISTS update_campaigns_updated_at ON public.campaigns;
 CREATE TRIGGER update_campaigns_updated_at
   BEFORE UPDATE ON public.campaigns
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+-- Checkout sessions table (for Stripe → Supabase auto-login bridge)
+CREATE TABLE IF NOT EXISTS public.checkout_sessions (
+  session_id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  temp_password TEXT NOT NULL,
+  processed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for checkout_sessions (only service role should access)
+ALTER TABLE public.checkout_sessions ENABLE ROW LEVEL SECURITY;
+
+-- No public policies — accessed only via service role key in API routes
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_campaigns_user_id ON public.campaigns(user_id);
 CREATE INDEX IF NOT EXISTS idx_generations_user_id ON public.generations(user_id);
 CREATE INDEX IF NOT EXISTS idx_generations_campaign_id ON public.generations(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_ai_models_user_id ON public.ai_models(user_id);
+CREATE INDEX IF NOT EXISTS idx_checkout_sessions_user_id ON public.checkout_sessions(user_id);

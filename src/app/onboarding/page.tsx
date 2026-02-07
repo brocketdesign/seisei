@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useCallback, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -16,6 +16,7 @@ import {
   Tag,
   Users,
   Sparkles,
+  Loader2,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -80,11 +81,23 @@ const staggerItem = {
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function Onboarding() {
+function OnboardingContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>('welcome');
   const [direction, setDirection] = useState(1);
   const [welcomeDone, setWelcomeDone] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  // Handle cancel URL redirect back with ?step=plan
+  useEffect(() => {
+    const stepParam = searchParams.get('step');
+    if (stepParam === 'plan') {
+      setWelcomeDone(true);
+      setStep('plan');
+    }
+  }, [searchParams]);
 
   // Auto-advance from welcome after 3.5s
   useEffect(() => {
@@ -240,8 +253,50 @@ export default function Onboarding() {
     if (currentIndex < STEPS.length - 1) {
       setDirection(1);
       setStep(STEPS[currentIndex + 1]);
-    } else {
-      router.push('/dashboard');
+    }
+  };
+
+  const handlePlanSelect = async (planId: string) => {
+    // Enterprise plan → contact page
+    if (planId === 'enterprise') {
+      router.push('/contact');
+      return;
+    }
+
+    setCheckoutLoading(planId);
+    setCheckoutError(null);
+
+    try {
+      const onboardingData = {
+        brand,
+        product,
+        styles: selectedStyles,
+        platforms: selectedPlatforms,
+      };
+
+      // Persist to localStorage in case user navigates back
+      localStorage.setItem('seisei_onboarding', JSON.stringify(onboardingData));
+
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId, onboardingData }),
+      });
+
+      const data = await response.json();
+
+      if (data.sessionUrl) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.sessionUrl;
+      } else if (data.redirectUrl) {
+        router.push(data.redirectUrl);
+      } else {
+        throw new Error(data.error || 'チェックアウトの作成に失敗しました');
+      }
+    } catch (err) {
+      console.error('Checkout error:', err);
+      setCheckoutError(err instanceof Error ? err.message : 'エラーが発生しました');
+      setCheckoutLoading(null);
     }
   };
 
@@ -794,18 +849,39 @@ export default function Onboarding() {
                         ))}
                       </ul>
                       <button
-                        onClick={handleNext}
-                        className={`w-full py-3 rounded-lg text-sm font-bold transition-colors ${
+                        onClick={() => handlePlanSelect(plan.id)}
+                        disabled={checkoutLoading !== null}
+                        className={`w-full py-3 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                           plan.recommended
                             ? 'bg-black text-white hover:bg-gray-800'
                             : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-100'
                         }`}
                       >
-                        選択する
+                        {checkoutLoading === plan.id ? (
+                          <span className="inline-flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            処理中...
+                          </span>
+                        ) : plan.id === 'enterprise' ? (
+                          'お問い合わせ'
+                        ) : (
+                          '選択する'
+                        )}
                       </button>
                     </motion.div>
                   ))}
                 </motion.div>
+
+                {/* Checkout Error */}
+                {checkoutError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm text-center"
+                  >
+                    {checkoutError}
+                  </motion.div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -843,5 +919,13 @@ export default function Onboarding() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function Onboarding() {
+  return (
+    <Suspense>
+      <OnboardingContent />
+    </Suspense>
   );
 }
