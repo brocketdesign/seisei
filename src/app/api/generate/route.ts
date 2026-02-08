@@ -284,6 +284,7 @@ export async function POST(request: NextRequest) {
                 .insert({
                     user_id: user.id,
                     campaign_id: campaignId || null,
+                    ai_model_id: modelData?.id || null,
                     original_image_url: outfitImage || modelImage || clothImage || sourceImage || null,
                     generated_image_url: generatedImageUrl,
                     model_type: mode,

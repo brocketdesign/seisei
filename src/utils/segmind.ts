@@ -44,8 +44,16 @@ interface FaceswapRequest {
     quality?: number; // 10-100, default 95
 }
 
+interface KlingImageToVideoRequest {
+    prompt: string;
+    start_image_url: string; // URL of the source image
+    end_image_url?: string;  // Optional end image URL
+    duration?: number;       // Duration in seconds, default 5
+}
+
 interface SegmindResponse {
     image?: string; // base64 encoded image
+    video?: Buffer; // raw video binary
     status?: string;
     error?: string;
 }
@@ -99,6 +107,28 @@ class SegmindClient {
     }
 
     /**
+     * Raw request that returns binary buffer (for video endpoints)
+     */
+    private async requestBinary(model: string, data: Record<string, unknown>): Promise<Buffer> {
+        const response = await fetch(`${SEGMIND_API_URL}/${model}`, {
+            method: 'POST',
+            headers: {
+                'x-api-key': this.apiKey,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Segmind API error: ${response.status} - ${error}`);
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+    }
+
+    /**
      * Virtual try-on using SegFit v1.3
      * Put clothing on a model/person image
      */
@@ -148,6 +178,19 @@ class SegmindClient {
             quality: params.quality ?? 95,
         });
     }
+
+    /**
+     * Image-to-Video using Kling O1
+     * Transforms a static image into a dynamic video
+     */
+    async imageToVideo(params: KlingImageToVideoRequest): Promise<Buffer> {
+        return this.requestBinary('kling-o1-image-to-video', {
+            prompt: params.prompt,
+            start_image_url: params.start_image_url,
+            ...(params.end_image_url && { end_image_url: params.end_image_url }),
+            duration: String(params.duration ?? 5),
+        });
+    }
 }
 
 // Export a factory function to create clients
@@ -159,4 +202,4 @@ export function createSegmindClient(apiKey?: string): SegmindClient {
     return new SegmindClient(key);
 }
 
-export type { SegfitRequest, ZImageTurboRequest, FaceswapRequest, SegmindResponse };
+export type { SegfitRequest, ZImageTurboRequest, FaceswapRequest, KlingImageToVideoRequest, SegmindResponse };

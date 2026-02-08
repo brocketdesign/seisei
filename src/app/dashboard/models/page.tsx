@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   Users, 
   Plus, 
@@ -25,10 +26,10 @@ type Model = AIModel;
 
 export default function ModelsPage() {
   const supabase = createClient();
-  const [view, setView] = useState<'roster' | 'add' | 'details'>('roster');
+  const router = useRouter();
+  const [view, setView] = useState<'roster' | 'add'>('roster');
   const [models, setModels] = useState<Model[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
-  const [selectedModel, setSelectedModel] = useState<Model | null>(null);
 
   // Filter State
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
@@ -101,16 +102,14 @@ export default function ModelsPage() {
     }
   };
 
-  // Handle Model Click
+  // Handle Model Click — navigate to model detail page
   const handleModelClick = (model: Model) => {
-    setSelectedModel(model);
-    setView('details');
+    router.push(`/dashboard/models/${model.id}`);
   };
 
   // Back to Roster
   const handleBack = () => {
     setView('roster');
-    setSelectedModel(null);
     setNewModel({ name: '', bodyType: 'Slim', isLocked: false, tags: [], sex: 'female' });
   };
 
@@ -152,17 +151,6 @@ export default function ModelsPage() {
             setMode={setAddMode} 
             newModel={newModel}
             setNewModel={setNewModel}
-          />
-        )}
-
-        {view === 'details' && selectedModel && (
-          <ModelDetailsView 
-            model={selectedModel} 
-            onBack={handleBack} 
-            onSave={(updated) => {
-              setModels(models.map(m => m.id === updated.id ? updated : m));
-              handleBack();
-            }}
           />
         )}
       </div>

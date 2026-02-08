@@ -23,8 +23,8 @@ async function ensureBucket(admin: ReturnType<typeof getAdminClient>) {
     if (!data) {
         await admin.storage.createBucket(BUCKET_NAME, {
             public: true,
-            fileSizeLimit: 20 * 1024 * 1024, // 20MB
-            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp'],
+            fileSizeLimit: 50 * 1024 * 1024, // 50MB (for videos)
+            allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'],
         });
     }
 }
@@ -71,6 +71,43 @@ export async function uploadImageToStorage(
     }
 
     // Get the public URL
+    const { data: urlData } = admin.storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(fileName);
+
+    return urlData.publicUrl;
+}
+
+/**
+ * Upload a raw video buffer to Supabase Storage and return the public URL.
+ *
+ * @param buffer   - The video file as a Buffer
+ * @param folder   - Optional subfolder inside the bucket (e.g. "videos")
+ * @param mimeType - The MIME type of the video (default: "video/mp4")
+ * @returns Public URL string
+ */
+export async function uploadVideoToStorage(
+    buffer: Buffer,
+    folder: string = 'videos',
+    mimeType: string = 'video/mp4'
+): Promise<string> {
+    const admin = getAdminClient();
+    await ensureBucket(admin);
+
+    const ext = mimeType.split('/')[1] || 'mp4';
+    const fileName = `${folder}/${crypto.randomUUID()}.${ext}`;
+
+    const { error } = await admin.storage
+        .from(BUCKET_NAME)
+        .upload(fileName, buffer, {
+            contentType: mimeType,
+            upsert: false,
+        });
+
+    if (error) {
+        throw new Error(`Storage upload failed: ${error.message}`);
+    }
+
     const { data: urlData } = admin.storage
         .from(BUCKET_NAME)
         .getPublicUrl(fileName);

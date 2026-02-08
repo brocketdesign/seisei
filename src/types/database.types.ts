@@ -122,6 +122,7 @@ export interface Database {
                     id: string
                     user_id: string
                     campaign_id: string | null
+                    ai_model_id: string | null
                     original_image_url: string | null
                     generated_image_url: string | null
                     model_type: string | null
@@ -134,6 +135,7 @@ export interface Database {
                     id?: string
                     user_id: string
                     campaign_id?: string | null
+                    ai_model_id?: string | null
                     original_image_url?: string | null
                     generated_image_url?: string | null
                     model_type?: string | null
@@ -146,6 +148,7 @@ export interface Database {
                     id?: string
                     user_id?: string
                     campaign_id?: string | null
+                    ai_model_id?: string | null
                     original_image_url?: string | null
                     generated_image_url?: string | null
                     model_type?: string | null
@@ -225,6 +228,48 @@ export interface Database {
                     is_active?: boolean
                     created_at?: string
                     updated_at?: string
+                }
+                Relationships: []
+            }
+            video_generations: {
+                Row: {
+                    id: string
+                    user_id: string
+                    generation_id: string | null
+                    ai_model_id: string | null
+                    source_image_url: string
+                    video_url: string | null
+                    prompt: string | null
+                    template: string | null
+                    duration: number
+                    status: 'pending' | 'processing' | 'completed' | 'failed'
+                    created_at: string
+                }
+                Insert: {
+                    id?: string
+                    user_id: string
+                    generation_id?: string | null
+                    ai_model_id?: string | null
+                    source_image_url: string
+                    video_url?: string | null
+                    prompt?: string | null
+                    template?: string | null
+                    duration?: number
+                    status?: 'pending' | 'processing' | 'completed' | 'failed'
+                    created_at?: string
+                }
+                Update: {
+                    id?: string
+                    user_id?: string
+                    generation_id?: string | null
+                    ai_model_id?: string | null
+                    source_image_url?: string
+                    video_url?: string | null
+                    prompt?: string | null
+                    template?: string | null
+                    duration?: number
+                    status?: 'pending' | 'processing' | 'completed' | 'failed'
+                    created_at?: string
                 }
                 Relationships: []
             }

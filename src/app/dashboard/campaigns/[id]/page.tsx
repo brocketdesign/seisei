@@ -93,10 +93,14 @@ export default function CampaignDetailPage() {
     const fetchData = async () => {
       setLoading(true);
 
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+
       const { data: campaignData } = await supabase
         .from('campaigns')
         .select('*')
         .eq('id', campaignId)
+        .eq('user_id', user.id)
         .single();
 
       if (!campaignData) {
@@ -256,10 +260,13 @@ function CampaignInfoTab({
 
   const handleSave = async () => {
     setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
     const { data, error } = await supabase
       .from('campaigns')
       .update({ name: name.trim(), description: description.trim() || null, status })
       .eq('id', campaign.id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
@@ -271,7 +278,10 @@ function CampaignInfoTab({
 
   const handleDelete = async () => {
     setDeleting(true);
-    await supabase.from('campaigns').delete().eq('id', campaign.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('campaigns').delete().eq('id', campaign.id).eq('user_id', user.id);
+    }
     onDelete();
   };
 

@@ -17,7 +17,7 @@ export async function GET() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: generations, error: dbError } = await (supabase as any)
             .from('generations')
-            .select('id, generated_image_url, model_type, background, aspect_ratio, status, created_at')
+            .select('id, generated_image_url, model_type, background, aspect_ratio, status, ai_model_id, created_at')
             .eq('user_id', user.id)
             .eq('status', 'completed')
             .order('created_at', { ascending: false })
