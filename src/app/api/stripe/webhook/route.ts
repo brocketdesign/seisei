@@ -171,6 +171,7 @@ async function updateUserProfile(userId: string, metadata: Record<string, string
         styles: safeJsonParse(metadata.styles) || [],
         platforms: safeJsonParse(metadata.platforms) || [],
         plan: metadata.planId || 'starter',
+        billing_interval: metadata.billingInterval || 'month',
         updated_at: new Date().toISOString(),
     });
 

@@ -17,6 +17,10 @@ import {
   Users,
   Sparkles,
   Loader2,
+  Crown,
+  Zap,
+  Star,
+  MessageSquare,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -89,6 +93,7 @@ function OnboardingContent() {
   const [welcomeDone, setWelcomeDone] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
 
   // Handle cancel URL redirect back with ?step=plan
   useEffect(() => {
@@ -202,24 +207,51 @@ function OnboardingContent() {
     {
       id: 'starter',
       name: 'スターター',
-      price: '¥5,000',
-      period: '/月',
-      features: ['月50枚生成', '標準画質', 'メールサポート'],
+      description: '小規模ビジネスに最適',
+      icon: Zap,
+      monthlyPrice: 5000,
+      yearlyPrice: 48000,
+      features: [
+        { text: '月50枚画像生成', included: true },
+        { text: '標準画質', included: true },
+        { text: 'メールサポート', included: true },
+        { text: '動画生成', included: false },
+        { text: '4K高画質', included: false },
+        { text: 'API連携', included: false },
+      ],
     },
     {
       id: 'pro',
       name: 'プロフェッショナル',
-      price: '¥20,000',
-      period: '/月',
-      features: ['無制限生成', '4K高画質', '優先サポート', '商用利用完全保証'],
+      description: '成長するブランドに',
+      icon: Star,
+      monthlyPrice: 20000,
+      yearlyPrice: 192000,
       recommended: true,
+      features: [
+        { text: '月500枚画像生成', included: true },
+        { text: '月50本動画生成', included: true },
+        { text: '4K高画質', included: true },
+        { text: '優先サポート', included: true },
+        { text: '商用利用完全保証', included: true },
+        { text: 'API連携', included: false },
+      ],
     },
     {
-      id: 'enterprise',
-      name: 'エンタープライズ',
-      price: '要相談',
-      period: '',
-      features: ['API連携', '専属マネージャー', 'カスタムモデル'],
+      id: 'business',
+      name: 'ビジネス',
+      description: '大規模運用を支える',
+      icon: Crown,
+      monthlyPrice: 50000,
+      yearlyPrice: 480000,
+      features: [
+        { text: '月2,000枚画像生成', included: true },
+        { text: '月200本動画生成', included: true },
+        { text: '4K高画質', included: true },
+        { text: '専属サポート', included: true },
+        { text: '商用利用完全保証', included: true },
+        { text: 'API連携', included: true },
+      ],
     },
   ];
 
@@ -280,7 +312,7 @@ function OnboardingContent() {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, onboardingData }),
+        body: JSON.stringify({ planId, billingInterval, onboardingData }),
       });
 
       const data = await response.json();
@@ -808,68 +840,178 @@ function OnboardingContent() {
                   <p className="text-gray-500 text-sm">ビジネス規模に合わせた最適なプランをお選びください</p>
                 </div>
 
+                {/* Billing interval toggle */}
+                <div className="flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setBillingInterval('month')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      billingInterval === 'month'
+                        ? 'bg-black text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    月額
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingInterval('year')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                      billingInterval === 'year'
+                        ? 'bg-black text-white shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    年額
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      billingInterval === 'year'
+                        ? 'bg-green-400 text-green-950'
+                        : 'bg-green-100 text-green-700'
+                    }`}>
+                      20%OFF
+                    </span>
+                  </button>
+                </div>
+
+                {/* Plan cards – 3 columns */}
                 <motion.div
                   variants={staggerContainer}
                   initial="enter"
                   animate="center"
-                  className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                  className="grid grid-cols-1 md:grid-cols-3 gap-5"
                 >
-                  {plans.map((plan) => (
-                    <motion.div
-                      key={plan.id}
-                      variants={staggerItem}
-                      whileHover={{ y: -4 }}
-                      className={`relative p-6 rounded-xl border flex flex-col transition-shadow duration-300 ${
-                        plan.recommended
-                          ? 'border-black shadow-lg bg-white scale-105 z-10'
-                          : 'border-gray-200 bg-gray-50 text-gray-500 hover:shadow-md'
-                      }`}
-                    >
-                      {plan.recommended && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.4 }}
-                          className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black text-white text-xs px-3 py-1 rounded-full"
-                        >
-                          おすすめ
-                        </motion.div>
-                      )}
-                      <h3 className="text-lg font-bold mb-2">{plan.name}</h3>
-                      <div className="mb-6">
-                        <span className="text-3xl font-bold text-gray-900">{plan.price}</span>
-                        <span className="text-sm">{plan.period}</span>
-                      </div>
-                      <ul className="space-y-3 mb-8 flex-1">
-                        {plan.features.map((f, i) => (
-                          <li key={i} className="flex items-center text-sm">
-                            <Check className="w-4 h-4 mr-2 text-green-500 flex-shrink-0" />
-                            <span>{f}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <button
-                        onClick={() => handlePlanSelect(plan.id)}
-                        disabled={checkoutLoading !== null}
-                        className={`w-full py-3 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  {plans.map((plan) => {
+                    const Icon = plan.icon;
+                    const price = billingInterval === 'year' ? plan.yearlyPrice : plan.monthlyPrice;
+                    const formattedPrice = `¥${price.toLocaleString()}`;
+                    const period = billingInterval === 'year' ? '/年' : '/月';
+                    const monthlyEquivalent = billingInterval === 'year'
+                      ? `月あたり ¥${Math.round(plan.yearlyPrice / 12).toLocaleString()}`
+                      : null;
+
+                    return (
+                      <motion.div
+                        key={plan.id}
+                        variants={staggerItem}
+                        whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                        className={`relative rounded-2xl border-2 flex flex-col overflow-hidden transition-shadow duration-300 ${
                           plan.recommended
-                            ? 'bg-black text-white hover:bg-gray-800'
-                            : 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-100'
+                            ? 'border-black shadow-xl bg-white'
+                            : 'border-gray-200 bg-white hover:shadow-lg hover:border-gray-300'
                         }`}
                       >
-                        {checkoutLoading === plan.id ? (
-                          <span className="inline-flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            処理中...
-                          </span>
-                        ) : plan.id === 'enterprise' ? (
-                          'お問い合わせ'
-                        ) : (
-                          '選択する'
+                        {/* Recommended badge */}
+                        {plan.recommended && (
+                          <div className="bg-black text-white text-xs font-bold text-center py-1.5 tracking-wide">
+                            一番人気
+                          </div>
                         )}
-                      </button>
-                    </motion.div>
-                  ))}
+
+                        <div className="p-6 flex flex-col flex-1">
+                          {/* Plan header */}
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                              plan.recommended
+                                ? 'bg-black text-white'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              <Icon className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
+                              <p className="text-xs text-gray-400">{plan.description}</p>
+                            </div>
+                          </div>
+
+                          {/* Price */}
+                          <div className="mb-6">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-4xl font-extrabold tracking-tight text-gray-900">
+                                {formattedPrice}
+                              </span>
+                              <span className="text-sm text-gray-400 font-medium">{period}</span>
+                            </div>
+                            {monthlyEquivalent && (
+                              <p className="text-xs text-green-600 font-medium mt-1">{monthlyEquivalent}</p>
+                            )}
+                          </div>
+
+                          {/* Divider */}
+                          <div className="h-px bg-gray-100 mb-5" />
+
+                          {/* Features */}
+                          <ul className="space-y-3 mb-8 flex-1">
+                            {plan.features.map((f, i) => (
+                              <li key={i} className="flex items-center gap-2.5 text-sm">
+                                {f.included ? (
+                                  <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                                    <Check className="w-3 h-3 text-green-600" />
+                                  </div>
+                                ) : (
+                                  <div className="w-5 h-5 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
+                                    <span className="block w-2 h-px bg-gray-300" />
+                                  </div>
+                                )}
+                                <span className={f.included ? 'text-gray-700' : 'text-gray-300'}>
+                                  {f.text}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+
+                          {/* CTA */}
+                          <button
+                            onClick={() => handlePlanSelect(plan.id)}
+                            disabled={checkoutLoading !== null}
+                            className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                              plan.recommended
+                                ? 'bg-black text-white hover:bg-gray-800 shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/15'
+                                : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                            }`}
+                          >
+                            {checkoutLoading === plan.id ? (
+                              <span className="inline-flex items-center gap-2">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                処理中...
+                              </span>
+                            ) : (
+                              '選択する'
+                            )}
+                          </button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+
+                {/* Enterprise CTA banner */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5, duration: 0.5, ease }}
+                  className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8 mt-4"
+                >
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(168,85,247,0.15)_0%,_transparent_60%)]" />
+                  <div className="relative flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center border border-white/10">
+                        <Building2 className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-white">エンタープライズ</h3>
+                        <p className="text-sm text-gray-400 mt-0.5">
+                          カスタム生成数・専属マネージャー・カスタムモデル・API連携
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handlePlanSelect('enterprise')}
+                      className="flex items-center gap-2 bg-white text-gray-900 px-6 py-3 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors whitespace-nowrap"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      お問い合わせ
+                    </button>
+                  </div>
                 </motion.div>
 
                 {/* Checkout Error */}

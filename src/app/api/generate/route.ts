@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 import { createSegmindClient } from '@/utils/segmind';
 import { buildModelPrompt, type AIModel } from '@/types/models';
 import { uploadImageToStorage } from '@/utils/storage';
+import { canGenerateImage } from '@/utils/plan-limits';
 
 export const maxDuration = 120; // Allow up to 2 minutes for generation
 
@@ -32,6 +33,21 @@ export async function POST(request: NextRequest) {
 
             if (authError || !user) {
                 await sendEvent('error', { error: 'Unauthorized' });
+                await writer.close();
+                return;
+            }
+
+            // Check image generation quota
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: profile } = await (supabase as any)
+                .from('profiles')
+                .select('plan')
+                .eq('id', user.id)
+                .single();
+            const userPlan = profile?.plan || 'starter';
+            const allowed = await canGenerateImage(supabase, user.id, userPlan);
+            if (!allowed) {
+                await sendEvent('error', { error: '今月の画像生成上限に達しました。プランをアップグレードしてください。' });
                 await writer.close();
                 return;
             }
