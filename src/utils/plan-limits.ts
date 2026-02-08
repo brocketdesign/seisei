@@ -1,5 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { getPlanLimits, type PlanLimits } from './stripe';
+import { getPlanLimits, type PlanLimits } from './plans';
 
 export interface UsageStatus {
     plan: string;

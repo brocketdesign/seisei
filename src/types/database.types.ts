@@ -23,6 +23,7 @@ export interface Database {
                     styles: string[] | null
                     platforms: string[] | null
                     plan: string | null
+                    notification_preferences: Record<string, boolean> | null
                     created_at: string
                     updated_at: string
                 }
@@ -39,6 +40,7 @@ export interface Database {
                     styles?: string[] | null
                     platforms?: string[] | null
                     plan?: string | null
+                    notification_preferences?: Record<string, boolean> | null
                     created_at?: string
                     updated_at?: string
                 }
@@ -55,6 +57,7 @@ export interface Database {
                     styles?: string[] | null
                     platforms?: string[] | null
                     plan?: string | null
+                    notification_preferences?: Record<string, boolean> | null
                     created_at?: string
                     updated_at?: string
                 }

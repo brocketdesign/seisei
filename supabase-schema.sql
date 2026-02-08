@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   platforms TEXT[],
   plan TEXT DEFAULT 'starter',
   billing_interval TEXT DEFAULT 'month',
+  notification_preferences JSONB DEFAULT '{"generation_complete": true, "campaign_report": true, "plan_reminder": false, "new_features": true}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Megaphone,
   Plus,
@@ -11,6 +12,10 @@ import {
   Search,
   ArrowUpRight,
   Loader2,
+  Eye,
+  Copy,
+  Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -30,13 +35,26 @@ const statusLabels: Record<string, { label: string; style: string }> = {
   draft: { label: '下書き', style: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
 };
 
+const statusOptions: { key: Campaign['status']; label: string }[] = [
+  { key: 'draft', label: '下書き' },
+  { key: 'active', label: '実施中' },
+  { key: 'scheduled', label: '予定' },
+  { key: 'completed', label: '完了' },
+];
+
 export default function CampaignsPage() {
+  const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<'all' | string>('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const supabase = createClient();
 
@@ -80,6 +98,70 @@ export default function CampaignsPage() {
       setShowCreateForm(false);
     }
     setCreating(false);
+  };
+
+  // Close menus on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+        setStatusMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleDuplicate = async (campaign: Campaign) => {
+    setOpenMenuId(null);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('campaigns')
+      .insert({
+        user_id: user.id,
+        name: `${campaign.name} (コピー)`,
+        status: 'draft' as const,
+        description: campaign.description,
+      })
+      .select()
+      .single();
+
+    if (data && !error) {
+      setCampaigns(prev => [data, ...prev]);
+    }
+  };
+
+  const handleStatusChange = async (campaignId: string, newStatus: Campaign['status']) => {
+    setOpenMenuId(null);
+    setStatusMenuId(null);
+
+    const { error } = await supabase
+      .from('campaigns')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', campaignId);
+
+    if (!error) {
+      setCampaigns(prev =>
+        prev.map(c => c.id === campaignId ? { ...c, status: newStatus, updated_at: new Date().toISOString() } : c)
+      );
+    }
+  };
+
+  const handleDelete = async (campaignId: string) => {
+    setDeleting(true);
+    const { error } = await supabase
+      .from('campaigns')
+      .delete()
+      .eq('id', campaignId);
+
+    if (!error) {
+      setCampaigns(prev => prev.filter(c => c.id !== campaignId));
+    }
+    setDeleting(false);
+    setDeleteConfirmId(null);
+    setOpenMenuId(null);
   };
 
   return (
@@ -194,12 +276,15 @@ export default function CampaignsPage() {
           </div>
         ) : filtered.length > 0 ? (
           filtered.map(campaign => (
-            <Link
+            <div
               key={campaign.id}
-              href={`/dashboard/campaigns/${campaign.id}`}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-all cursor-pointer group block"
+              className={`bg-white rounded-xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-all group relative ${openMenuId === campaign.id ? 'z-20' : 'z-0'}`}
             >
-              <div className="flex items-center justify-between">
+              <Link
+                href={`/dashboard/campaigns/${campaign.id}`}
+                className="absolute inset-0 rounded-xl z-0"
+              />
+              <div className="flex items-center justify-between relative">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center group-hover:bg-gray-100 transition-colors">
                     <Megaphone className="w-5 h-5 text-gray-600" />
@@ -215,16 +300,145 @@ export default function CampaignsPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 z-10">
                   <span className={`px-3 py-1 text-xs font-medium rounded-full border ${(statusLabels[campaign.status] || statusLabels.draft).style}`}>
                     {(statusLabels[campaign.status] || statusLabels.draft).label}
                   </span>
-                  <button onClick={(e) => e.preventDefault()} className="p-2 text-gray-400 hover:text-black rounded-lg hover:bg-gray-50 transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
+                  <div className="relative" ref={openMenuId === campaign.id ? menuRef : undefined}>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpenMenuId(openMenuId === campaign.id ? null : campaign.id);
+                        setStatusMenuId(null);
+                        setDeleteConfirmId(null);
+                      }}
+                      className="p-2 text-gray-400 hover:text-black rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+
+                    {openMenuId === campaign.id && (
+                      <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1 overflow-hidden">
+                        {/* View details */}
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                            router.push(`/dashboard/campaigns/${campaign.id}`);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Eye className="w-4 h-4 text-gray-400" />
+                          詳細を表示
+                        </button>
+
+                        {/* Duplicate */}
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDuplicate(campaign);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Copy className="w-4 h-4 text-gray-400" />
+                          複製する
+                        </button>
+
+                        {/* Status change */}
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setStatusMenuId(statusMenuId === campaign.id ? null : campaign.id);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <RefreshCw className="w-4 h-4 text-gray-400" />
+                            ステータス変更
+                          </button>
+                          {statusMenuId === campaign.id && (
+                            <div className="border-t border-gray-100 bg-gray-50/50">
+                              {statusOptions.map(opt => (
+                                <button
+                                  key={opt.key}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleStatusChange(campaign.id, opt.key);
+                                  }}
+                                  className={`w-full flex items-center gap-3 px-4 pl-11 py-2 text-sm transition-colors ${
+                                    campaign.status === opt.key
+                                      ? 'text-black font-medium bg-gray-100'
+                                      : 'text-gray-600 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  <span className={`w-2 h-2 rounded-full ${
+                                    opt.key === 'active' ? 'bg-green-500' :
+                                    opt.key === 'scheduled' ? 'bg-blue-500' :
+                                    opt.key === 'completed' ? 'bg-gray-400' :
+                                    'bg-yellow-500'
+                                  }`} />
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Divider */}
+                        <div className="border-t border-gray-100 my-1" />
+
+                        {/* Delete */}
+                        {deleteConfirmId === campaign.id ? (
+                          <div className="px-4 py-3">
+                            <p className="text-xs text-gray-500 mb-2">このキャンペーンを削除しますか？</p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDelete(campaign.id);
+                                }}
+                                disabled={deleting}
+                                className="flex-1 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                              >
+                                {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : '削除する'}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setDeleteConfirmId(null);
+                                }}
+                                className="flex-1 px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                              >
+                                キャンセル
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDeleteConfirmId(campaign.id);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            削除する
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </Link>
+            </div>
           ))
         ) : (
           <div className="py-16 flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
