@@ -129,7 +129,7 @@ export default function ProductsPage() {
   return (
     <>
       {/* Header */}
-      <header className="mb-8 flex justify-between items-center">
+      <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">商品管理</h2>
           <p className="text-gray-500 mt-1 text-sm">キャンペーンに紐づく商品の登録・管理を行います</p>
@@ -274,7 +274,7 @@ function ListView({
   return (
     <div className="space-y-6">
       {/* Campaign Selector + Filters */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <CampaignSelector
           campaigns={campaigns}
           selectedCampaignId={selectedCampaignId}
@@ -288,7 +288,7 @@ function ListView({
             className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-black/5 outline-none transition-all"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
           {(['all', 'active', 'inactive'] as const).map(status => (
             <button
               key={status}

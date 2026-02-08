@@ -164,9 +164,9 @@ export default function CampaignDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           キャンペーン一覧
         </Link>
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-start gap-4">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-2xl font-bold text-gray-900">{campaign.name}</h2>
               <span className={`px-3 py-1 text-xs font-medium rounded-full border ${statusInfo.style}`}>
                 {statusInfo.label}
@@ -187,12 +187,12 @@ export default function CampaignDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mt-6 border-b border-gray-200">
+        <div className="flex gap-1 mt-6 border-b border-gray-200 overflow-x-auto">
           {tabs.map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'border-black text-black'
                   : 'border-transparent text-gray-500 hover:text-black hover:border-gray-300'
@@ -310,7 +310,7 @@ function CampaignInfoTab({
 
         <div>
           <label className="block text-sm font-bold text-gray-900 mb-2">ステータス</label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {(['draft', 'active', 'scheduled', 'completed'] as const).map(s => (
               <button
                 key={s}
@@ -327,7 +327,7 @@ function CampaignInfoTab({
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-4 border-t border-gray-100 gap-3">
           <div className="text-xs text-gray-400">
             最終更新: {new Date(campaign.updated_at).toLocaleString('ja-JP')}
           </div>

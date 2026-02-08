@@ -452,7 +452,7 @@ export default function GeneratePage() {
 
   return (
     <>
-      <header className="flex justify-between items-center mb-8">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">画像生成</h2>
           <p className="text-gray-500 text-sm mt-1">商品を選択して、モデル着用イメージを生成します。</p>
@@ -466,9 +466,9 @@ export default function GeneratePage() {
         </Link>
       </header>
 
-      <div className="grid grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
         {/* Left Column: Controls */}
-        <div className="col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-6">
 
           {/* Campaign Selector */}
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -790,7 +790,7 @@ export default function GeneratePage() {
             <div className="space-y-4">
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-2 block">背景</label>
-                <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { value: 'スタジオ（白背景）', label: 'スタジオ', image: '/backgrounds/studio.webp' },
                     { value: 'ストリート（昼）', label: 'ストリート', image: '/backgrounds/street.webp' },
@@ -884,7 +884,7 @@ export default function GeneratePage() {
         </div>
 
         {/* Right Column: Results */}
-        <div className="col-span-8">
+        <div className="lg:col-span-8">
           <div className="bg-white h-full rounded-xl border border-gray-100 shadow-sm p-6 flex flex-col">
             <div className="flex justify-between items-center mb-6">
               <div>

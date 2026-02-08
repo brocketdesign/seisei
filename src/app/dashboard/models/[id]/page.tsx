@@ -224,9 +224,9 @@ export default function ModelDetailPage() {
 
       {/* Model Header */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-8">
-        <div className="flex gap-6">
+        <div className="flex flex-col sm:flex-row gap-6">
           {/* Avatar */}
-          <div className="w-32 h-32 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+          <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
             {model.avatar ? (
               <img src={model.avatar} alt={model.name} className="w-full h-full object-cover" />
             ) : (
@@ -303,7 +303,7 @@ export default function ModelDetailPage() {
 
             {/* Edit form (inline) */}
             {isEditing && formData && (
-              <div className="mt-4 grid grid-cols-3 gap-4">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">性別</label>
                   <div className="grid grid-cols-2 gap-1">
@@ -563,10 +563,10 @@ export default function ModelDetailPage() {
       {/* Image Preview Modal */}
       {previewImage && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-8"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-8"
           onClick={() => setPreviewImage(null)}
         >
-          <div className="relative max-w-3xl max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+          <div className="relative max-w-3xl max-h-[80vh] w-full" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setPreviewImage(null)}
               className="absolute -top-3 -right-3 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 z-10"
@@ -585,11 +585,11 @@ export default function ModelDetailPage() {
       {/* Video Preview Modal */}
       {previewVideo && previewVideo.video_url && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-8"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-8"
           onClick={() => setPreviewVideo(null)}
         >
           <div
-            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden"
+            className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-gray-100 flex items-center justify-between">

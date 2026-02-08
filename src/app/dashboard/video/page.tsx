@@ -243,7 +243,7 @@ export default function VideoPage() {
 
   return (
     <>
-      <header className="flex justify-between items-center mb-8">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">動画生成</h2>
           <p className="text-gray-500 text-sm mt-1">画像から動画を生成します</p>
@@ -257,10 +257,10 @@ export default function VideoPage() {
         </Link>
       </header>
 
-      <div className="grid grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
 
         {/* Left Column: Controls */}
-        <div className="col-span-4 space-y-6">
+        <div className="lg:col-span-4 space-y-6">
 
             {/* --- Campaign Selector --- */}
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -413,7 +413,7 @@ export default function VideoPage() {
           </div>
 
         {/* Right Column: Image selection + Video history */}
-        <div className="col-span-8 space-y-8">
+        <div className="lg:col-span-8 space-y-8">
 
             {/* --- Source Image Selection --- */}
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -438,7 +438,7 @@ export default function VideoPage() {
                   <p className="text-xs text-gray-300">まず画像生成ダッシュボードで画像を生成してください</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-5 gap-3 max-h-64 overflow-y-auto pr-1">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto pr-1">
                   {generations.map(g => (
                     <button
                       key={g.id}
@@ -486,7 +486,7 @@ export default function VideoPage() {
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {completedVideos.map(v => (
                     <div
                       key={v.id}
@@ -520,8 +520,8 @@ export default function VideoPage() {
 
       {/* Video Preview Modal */}
       {previewVideo && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-8" onClick={() => setPreviewVideo(null)}>
-          <div className="relative max-w-4xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 sm:p-8" onClick={() => setPreviewVideo(null)}>
+          <div className="relative max-w-4xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setPreviewVideo(null)}
               className="absolute top-4 right-4 z-10 p-2 bg-black/60 rounded-full text-white hover:bg-black/80 transition-colors"

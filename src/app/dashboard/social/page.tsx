@@ -265,12 +265,12 @@ export default function SocialPage() {
   return (
     <>
       {/* Header */}
-      <header className="flex justify-between items-center mb-8">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">ソーシャルメディア</h2>
           <p className="text-gray-500 text-sm mt-1">SNS投稿の管理・スケジュール・パフォーマンスを確認します。</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setShowAccounts(!showAccounts)}
             className="px-4 py-2.5 text-sm font-medium border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -307,7 +307,7 @@ export default function SocialPage() {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-px bg-gray-100">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-gray-100">
             {connectedAccounts.map((account) => {
               const meta = platformMeta[account.platform];
               const Icon = PlatformIcon[account.platform];
@@ -348,7 +348,7 @@ export default function SocialPage() {
       )}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
         {[
           { label: '接続プラットフォーム', value: connectedCount, icon: Share2 },
           { label: '合計フォロワー', value: totalFollowers.toLocaleString(), icon: Users },
@@ -368,7 +368,7 @@ export default function SocialPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
@@ -379,7 +379,7 @@ export default function SocialPage() {
         </div>
 
         {/* Status Filter */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
           {([
             { key: 'all', label: 'すべて' },
             { key: 'published', label: '公開済み' },
@@ -428,11 +428,11 @@ export default function SocialPage() {
             >
               {/* Main Row */}
               <div
-                className="p-5 flex items-center gap-5 cursor-pointer"
+                className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-5 cursor-pointer"
                 onClick={() => setExpandedPost(isExpanded ? null : post.id)}
               >
                 {/* Image Thumbnail */}
-                <div className={`w-16 h-16 rounded-lg ${post.imageThumbColor} flex-shrink-0 flex items-center justify-center`}>
+                <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-lg ${post.imageThumbColor} flex-shrink-0 flex items-center justify-center`}>
                   <ImageIcon className="w-6 h-6 text-gray-400/50" />
                 </div>
 
@@ -505,10 +505,10 @@ export default function SocialPage() {
               {/* Expanded Detail Panel */}
               {isExpanded && (
                 <div className="border-t border-gray-100 bg-gray-50/50">
-                  <div className="p-6 grid grid-cols-12 gap-6">
+                    <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
 
                     {/* Left: Image & Caption */}
-                    <div className="col-span-4 space-y-4">
+                    <div className="md:col-span-4 space-y-4">
                       <div className={`w-full aspect-[4/5] rounded-lg ${post.imageThumbColor} flex items-center justify-center`}>
                         <ImageIcon className="w-12 h-12 text-gray-400/30" />
                       </div>
@@ -516,7 +516,7 @@ export default function SocialPage() {
                     </div>
 
                     {/* Middle: Details */}
-                    <div className="col-span-4 space-y-5">
+                    <div className="md:col-span-4 space-y-5">
                       <div>
                         <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">投稿情報</h4>
                         <div className="space-y-3">
@@ -583,7 +583,7 @@ export default function SocialPage() {
                     </div>
 
                     {/* Right: Analytics */}
-                    <div className="col-span-4">
+                    <div className="md:col-span-4">
                       <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">パフォーマンス</h4>
                       {post.status === 'published' ? (
                         <div className="space-y-3">
@@ -635,7 +635,7 @@ export default function SocialPage() {
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+                  <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-wrap items-center justify-end gap-3">
                     {post.status === 'draft' && (
                       <button className="px-4 py-2 text-sm font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2">
                         <Send className="w-3.5 h-3.5" />

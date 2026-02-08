@@ -116,7 +116,7 @@ export default function ModelsPage() {
   return (
     <>
       {/* Header */}
-      <header className="mb-8 flex justify-between items-center">
+      <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">モデル管理</h2>
           <p className="text-gray-500 mt-1 text-sm">専属モデルの登録・編集・管理を行います</p>
@@ -181,7 +181,7 @@ function RosterView({
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input 
@@ -190,7 +190,7 @@ function RosterView({
             className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-black/5 outline-none transition-all"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
           {(['all', 'active', 'inactive'] as const).map(status => (
             <button
               key={status}

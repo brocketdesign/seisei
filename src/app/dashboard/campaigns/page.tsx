@@ -84,7 +84,7 @@ export default function CampaignsPage() {
 
   return (
     <>
-      <header className="flex justify-between items-center mb-8">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">キャンペーン管理</h2>
           <p className="text-gray-500 text-sm mt-1">キャンペーンの作成・管理・パフォーマンスを確認します。</p>
@@ -134,7 +134,7 @@ export default function CampaignsPage() {
       )}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
         {[
           { label: '実施中', value: campaigns.filter(c => c.status === 'active').length, icon: Megaphone },
           { label: '予定', value: campaigns.filter(c => c.status === 'scheduled').length, icon: Calendar },
@@ -153,7 +153,7 @@ export default function CampaignsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
@@ -162,7 +162,7 @@ export default function CampaignsPage() {
             className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-lg focus:ring-2 focus:ring-black/5 outline-none transition-all"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0">
           {([
             { key: 'all', label: 'すべて' },
             { key: 'active', label: '実施中' },

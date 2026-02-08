@@ -145,7 +145,7 @@ export default function Dashboard() {
       </header>
 
       {/* Stats Row — 3 metric cards + 1 "Top Model" visual card */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {/* Generation counts card — images & videos */}
         <div className="bg-white p-5 rounded-xl border border-gray-200/60 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4">今月の生成数</p>
@@ -215,7 +215,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {[
           { label: '画像を生成する', desc: '商品写真からモデル着用イメージを作成', href: '/dashboard/generate', icon: Sparkles },
           { label: 'モデルを管理する', desc: '専属モデルの登録・編集', href: '/dashboard/models', icon: Users },
@@ -258,7 +258,7 @@ export default function Dashboard() {
         </div>
 
         {latestGenerations.length > 0 ? (
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {latestGenerations.map((item) => (
               <div key={item.id} className="group relative aspect-[3/4] rounded-lg overflow-hidden bg-gray-100 cursor-pointer">
                 {item.generated_image_url && (

@@ -32,15 +32,15 @@ export default function SettingsPage() {
         <p className="text-gray-500 text-sm mt-1">アカウントとアプリケーションの設定を管理します。</p>
       </header>
 
-      <div className="flex gap-8">
+      <div className="flex flex-col md:flex-row gap-6 md:gap-8">
         {/* Settings Tabs */}
-        <div className="w-56 flex-shrink-0">
-          <nav className="space-y-1">
+        <div className="w-full md:w-56 flex-shrink-0">
+          <nav className="flex md:flex-col gap-1 overflow-x-auto pb-2 md:pb-0">
             {tabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-colors ${
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-colors whitespace-nowrap ${
                   activeTab === tab.key
                     ? 'bg-black text-white font-medium shadow-md shadow-black/10'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-black'
@@ -81,7 +81,7 @@ function ProfileSettings() {
             写真を変更
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">会社名</label>
             <input type="text" defaultValue="株式会社サンプル" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none" />

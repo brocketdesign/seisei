@@ -15,6 +15,8 @@ import {
   Sparkles,
   Building2,
   Package,
+  Menu,
+  X,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -33,6 +35,12 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [brandName, setBrandName] = useState<string | null>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const fetchBrandName = async () => {
@@ -61,8 +69,8 @@ export default function Sidebar() {
     router.refresh();
   };
 
-  return (
-    <aside className="w-64 bg-white border-r border-gray-100 flex flex-col fixed h-full z-30">
+  const sidebarContent = (
+    <>
       <div className="p-6">
         <Link href="/dashboard" className="flex items-center gap-3">
           <div className="w-9 h-9 bg-black rounded-lg flex items-center justify-center">
@@ -89,7 +97,7 @@ export default function Sidebar() {
         </div>
       )}
 
-      <nav className="flex-1 px-4 space-y-1">
+      <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive =
             item.href === '/dashboard'
@@ -126,6 +134,48 @@ export default function Sidebar() {
           <span>ログアウト</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 flex items-center justify-between px-4 py-3">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center">
+            <Sparkles className="w-3.5 h-3.5 text-white" />
+          </div>
+          <h1 className="text-lg font-bold tracking-tighter">生成</h1>
+        </Link>
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+        >
+          {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      </div>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/30"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile sidebar drawer */}
+      <aside
+        className={`lg:hidden fixed top-0 left-0 z-50 w-64 bg-white border-r border-gray-100 flex flex-col h-full transition-transform duration-300 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-100 flex-col fixed h-full z-30">
+        {sidebarContent}
+      </aside>
+    </>
   );
 }
