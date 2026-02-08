@@ -237,6 +237,7 @@ export interface Database {
                     user_id: string
                     generation_id: string | null
                     ai_model_id: string | null
+                    campaign_id: string | null
                     source_image_url: string
                     video_url: string | null
                     prompt: string | null
@@ -250,6 +251,7 @@ export interface Database {
                     user_id: string
                     generation_id?: string | null
                     ai_model_id?: string | null
+                    campaign_id?: string | null
                     source_image_url: string
                     video_url?: string | null
                     prompt?: string | null
@@ -263,6 +265,7 @@ export interface Database {
                     user_id?: string
                     generation_id?: string | null
                     ai_model_id?: string | null
+                    campaign_id?: string | null
                     source_image_url?: string
                     video_url?: string | null
                     prompt?: string | null

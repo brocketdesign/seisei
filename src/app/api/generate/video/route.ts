@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
             duration,        // Duration in seconds (default 5)
             generationId,    // ID of the source generation (optional)
             aiModelId,       // ID of the AI model used (optional)
+            campaignId,      // ID of the campaign (optional)
         } = body;
 
         if (!sourceImageUrl) {
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
                 user_id: user.id,
                 generation_id: generationId || null,
                 ai_model_id: aiModelId || null,
+                campaign_id: campaignId || null,
                 source_image_url: sourceImageUrl,
                 prompt,
                 template: template || null,
@@ -123,7 +125,7 @@ export async function GET() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: videos, error: dbError } = await (supabase as any)
             .from('video_generations')
-            .select('id, source_image_url, video_url, prompt, template, duration, status, ai_model_id, generation_id, created_at')
+            .select('id, source_image_url, video_url, prompt, template, duration, status, ai_model_id, generation_id, campaign_id, created_at')
             .eq('user_id', user.id)
             .order('created_at', { ascending: false })
             .limit(50);

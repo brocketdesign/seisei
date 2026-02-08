@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.video_generations (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   generation_id UUID REFERENCES public.generations(id) ON DELETE SET NULL,
   ai_model_id UUID REFERENCES public.ai_models(id) ON DELETE SET NULL,
+  campaign_id UUID REFERENCES public.campaigns(id) ON DELETE SET NULL,
   source_image_url TEXT NOT NULL,
   video_url TEXT,
   prompt TEXT,
@@ -44,3 +45,4 @@ CREATE INDEX IF NOT EXISTS idx_generations_ai_model_id ON public.generations(ai_
 CREATE INDEX IF NOT EXISTS idx_video_generations_user_id ON public.video_generations(user_id);
 CREATE INDEX IF NOT EXISTS idx_video_generations_ai_model_id ON public.video_generations(ai_model_id);
 CREATE INDEX IF NOT EXISTS idx_video_generations_generation_id ON public.video_generations(generation_id);
+CREATE INDEX IF NOT EXISTS idx_video_generations_campaign_id ON public.video_generations(campaign_id);
