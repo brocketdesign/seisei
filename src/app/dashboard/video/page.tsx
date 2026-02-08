@@ -242,30 +242,25 @@ export default function VideoPage() {
   const completedVideos = videos.filter(v => v.status === 'completed' && v.video_url);
 
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      <div className="max-w-7xl mx-auto px-8 py-8">
+    <>
+      <header className="flex justify-between items-center mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">動画生成</h2>
+          <p className="text-gray-500 text-sm mt-1">画像から動画を生成します</p>
+        </div>
+        <Link
+          href="/dashboard/campaigns"
+          className="bg-black text-white px-5 py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 rounded-lg shadow-lg shadow-black/10"
+        >
+          <Plus className="w-4 h-4" />
+          新規キャンペーン
+        </Link>
+      </header>
 
-        {/* ---------- Header ---------- */}
-        <header className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">動画生成</h1>
-            <p className="text-sm text-gray-500 mt-1">画像から動画を生成します</p>
-          </div>
-          <Link
-            href="/dashboard/campaigns"
-            className="bg-black text-white px-5 py-2.5 text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 rounded-lg shadow-lg shadow-black/10"
-          >
-            <Plus className="w-4 h-4" />
-            新規キャンペーン
-          </Link>
-        </header>
+      <div className="grid grid-cols-12 gap-8">
 
-        <div className="grid grid-cols-12 gap-8">
-
-          {/* ========================================================= */}
-          {/*  Left Column: Controls                                     */}
-          {/* ========================================================= */}
-          <div className="col-span-4 space-y-6">
+        {/* Left Column: Controls */}
+        <div className="col-span-4 space-y-6">
 
             {/* --- Campaign Selector --- */}
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -417,10 +412,8 @@ export default function VideoPage() {
             )}
           </div>
 
-          {/* ========================================================= */}
-          {/*  Right Column: Image selection + Video history              */}
-          {/* ========================================================= */}
-          <div className="col-span-8 space-y-8">
+        {/* Right Column: Image selection + Video history */}
+        <div className="col-span-8 space-y-8">
 
             {/* --- Source Image Selection --- */}
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
@@ -524,11 +517,8 @@ export default function VideoPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ============================================================= */}
-      {/*  Video Preview Modal                                           */}
-      {/* ============================================================= */}
+      {/* Video Preview Modal */}
       {previewVideo && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-8" onClick={() => setPreviewVideo(null)}>
           <div className="relative max-w-4xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -569,6 +559,6 @@ export default function VideoPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
