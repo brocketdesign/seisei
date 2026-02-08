@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/utils/stripe';
+import { getStripe } from '@/utils/stripe';
 import { createClient } from '@supabase/supabase-js';
 
 // Use service role key for admin operations
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     try {
         // Retrieve the Stripe session
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        const session = await getStripe().checkout.sessions.retrieve(sessionId);
 
         if (session.payment_status !== 'paid') {
             return NextResponse.json({
