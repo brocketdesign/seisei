@@ -104,10 +104,11 @@ export async function POST(request: NextRequest) {
                             isLocked: false,
                             age: modelData.age,
                             ethnicity: modelData.ethnicity,
+                            sex: modelData.sex || 'female',
                         };
                         stylePrompt = buildModelPrompt(rosterModel);
                     } else {
-                        stylePrompt = 'a Japanese female fashion model with natural makeup, elegant pose, slim build';
+                        stylePrompt = 'a Japanese fashion model with natural makeup, elegant pose, slim build';
                     }
 
                     const modelPrompt = `Full-body professional fashion photograph of ${stylePrompt}, standing ${bgPrompt}. Photorealistic, high quality fashion photography, 8k resolution, sharp focus, professional studio lighting.`;

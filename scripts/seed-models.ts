@@ -63,6 +63,7 @@ const models = [
     tags: ['Cute', 'Casual'],
     isActive: true,
     isLocked: true,
+    sex: 'female' as const,
   },
   {
     name: 'Aoi',
@@ -74,6 +75,7 @@ const models = [
     tags: ['Cool', 'Street'],
     isActive: false,
     isLocked: false,
+    sex: 'female' as const,
   },
   {
     name: 'Rina',
@@ -85,6 +87,7 @@ const models = [
     tags: ['Elegant', 'Formal'],
     isActive: true,
     isLocked: true,
+    sex: 'female' as const,
   },
   {
     name: 'Hana',
@@ -96,6 +99,7 @@ const models = [
     tags: ['Modern', 'Vibrant'],
     isActive: true,
     isLocked: false,
+    sex: 'female' as const,
   },
 ];
 
@@ -210,6 +214,7 @@ async function seed() {
         tags: model.tags,
         isActive: model.isActive,
         isLocked: model.isLocked,
+        sex: model.sex,
       };
 
       // Check if model already exists (by name + user)

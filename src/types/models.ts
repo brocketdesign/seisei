@@ -11,13 +11,14 @@ export type AIModel = {
   isLocked: boolean;
   age?: number;
   ethnicity?: string;
+  sex: 'male' | 'female';
 };
 
 export const initialModels: AIModel[] = [
-  { id: '1', name: 'Yuki', avatar: '/models/yuki.jpg', tags: ['Cute', 'Casual'], isActive: true, bodyType: 'Slim', isLocked: true, age: 22, ethnicity: 'Japanese' },
-  { id: '2', name: 'Aoi', avatar: '/models/aoi.jpg', tags: ['Cool', 'Street'], isActive: false, bodyType: 'Athletic', isLocked: false, age: 25, ethnicity: 'Japanese' },
-  { id: '3', name: 'Rina', avatar: '/models/rina.jpg', tags: ['Elegant', 'Formal'], isActive: true, bodyType: 'Curvy', isLocked: true, age: 28, ethnicity: 'Japanese' },
-  { id: '4', name: 'Hana', avatar: '/models/hana.jpg', tags: ['Modern', 'Vibrant'], isActive: true, bodyType: 'Slim', isLocked: false, age: 20, ethnicity: 'Japanese' },
+  { id: '1', name: 'Yuki', avatar: '/models/yuki.jpg', tags: ['Cute', 'Casual'], isActive: true, bodyType: 'Slim', isLocked: true, age: 22, ethnicity: 'Japanese', sex: 'female' },
+  { id: '2', name: 'Aoi', avatar: '/models/aoi.jpg', tags: ['Cool', 'Street'], isActive: false, bodyType: 'Athletic', isLocked: false, age: 25, ethnicity: 'Japanese', sex: 'female' },
+  { id: '3', name: 'Rina', avatar: '/models/rina.jpg', tags: ['Elegant', 'Formal'], isActive: true, bodyType: 'Curvy', isLocked: true, age: 28, ethnicity: 'Japanese', sex: 'female' },
+  { id: '4', name: 'Hana', avatar: '/models/hana.jpg', tags: ['Modern', 'Vibrant'], isActive: true, bodyType: 'Slim', isLocked: false, age: 20, ethnicity: 'Japanese', sex: 'female' },
 ];
 
 /**
@@ -57,5 +58,7 @@ export function buildModelPrompt(model: AIModel): string {
     .filter(Boolean)
     .join(', ');
 
-  return `a ${age}-year-old ${ethnicity} female fashion model with ${body}${vibes ? `, ${vibes}` : ''}, photogenic features, professional fashion model`;
+  const gender = model.sex === 'male' ? 'male' : 'female';
+
+  return `a ${age}-year-old ${ethnicity} ${gender} fashion model with ${body}${vibes ? `, ${vibes}` : ''}, photogenic features, professional fashion model`;
 }

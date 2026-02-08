@@ -145,6 +145,7 @@ export default function GeneratePage() {
             isLocked: m.model_data?.isLocked ?? false,
             age: m.model_data?.age,
             ethnicity: m.model_data?.ethnicity,
+            sex: m.model_data?.sex || 'female',
           }));
         setActiveModels(mapped);
         if (mapped.length > 0) setSelectedModelId(mapped[0].id);
@@ -366,6 +367,7 @@ export default function GeneratePage() {
             bodyType: selectedModel.bodyType,
             tags: selectedModel.tags,
             avatar: modelAvatarUrl,
+            sex: selectedModel.sex,
           } : undefined,
           background,
           aspectRatio,

@@ -61,7 +61,7 @@ export default function Home() {
             <span className="text-[10px] text-gray-400 tracking-widest ml-1 mt-1 hidden sm:inline">SEISEI</span>
           </div>
           <div className="flex items-center gap-3 sm:gap-6">
-            <Link href="#demo" className="text-sm text-gray-500 hover:text-black transition-colors hidden md:block">デモ</Link>
+            <Link href="/demo" className="text-sm text-gray-500 hover:text-black transition-colors hidden md:block">デモ</Link>
             <Link href="#features" className="text-sm text-gray-500 hover:text-black transition-colors hidden md:block">機能</Link>
             <Link
               href="/login"
@@ -115,12 +115,15 @@ export default function Home() {
                 今すぐ始める
                 <ArrowRight className="w-4 h-4" />
               </Link>
-              <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-gray-500 h-11 sm:h-12 px-6 rounded-xl text-sm font-medium hover:text-black hover:bg-gray-50 transition-colors border border-gray-200">
+              <Link
+                href="/demo"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 text-gray-500 h-11 sm:h-12 px-6 rounded-xl text-sm font-medium hover:text-black hover:bg-gray-50 transition-colors border border-gray-200"
+              >
                 <Play className="w-4 h-4" />
                 デモを見る
-              </button>
+              </Link>
             </motion.div>
-            <motion.p {...fadeIn(0.7)} className="text-[11px] sm:text-xs text-gray-300 mt-3 sm:mt-4">クレジットカード不要 · 10枚まで無料生成</motion.p>
+            <motion.p {...fadeIn(0.7)} className="text-[11px] sm:text-xs text-gray-300 mt-3 sm:mt-4">高品質AI生成 · プロ仕様のファッション画像</motion.p>
           </div>
 
           {/* ====== VISUAL FLOW — Input → AI → Outputs ====== */}
@@ -438,8 +441,8 @@ export default function Home() {
             今すぐ始めましょう
           </h2>
           <p className="text-gray-400 text-base sm:text-lg mb-8">
-            10枚まで完全無料。クレジットカード不要で、<br className="hidden md:block" />
-            プロ品質のファッション画像を体験できます。
+            最先端のAI技術で、プロ品質の<br className="hidden md:block" />
+            ファッション画像を瞬時に生成できます。
           </p>
           <Link
             href="/onboarding"
