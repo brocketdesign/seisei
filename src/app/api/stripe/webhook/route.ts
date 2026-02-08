@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStripe } from '@/utils/stripe';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { sendWelcomeEmail } from '@/utils/resend';
 
 // Use service role key for admin operations
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -101,6 +102,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
                 await supabaseAdmin.auth.admin.updateUserById(user.id, {
                     password: tempPassword,
                 });
+
+                // Send welcome email with updated credentials
+                try {
+                    await sendWelcomeEmail(customerEmail, tempPassword, metadata.brandName);
+                    console.log('[webhook] Welcome email sent to existing user:', customerEmail);
+                } catch (emailErr) {
+                    console.error('[webhook] Failed to send welcome email:', emailErr);
+                }
             }
             return;
         }
@@ -135,6 +144,15 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     if (sessionError) {
         console.error('[webhook] Error storing checkout session:', sessionError);
         throw sessionError;
+    }
+
+    // Send welcome email with login credentials
+    try {
+        await sendWelcomeEmail(customerEmail, tempPassword, metadata.brandName);
+        console.log('[webhook] Welcome email sent to:', customerEmail);
+    } catch (emailErr) {
+        // Don't throw — user was created successfully, email is best-effort
+        console.error('[webhook] Failed to send welcome email:', emailErr);
     }
 
     console.log('[webhook] Checkout completed successfully for:', authData.user.id);
