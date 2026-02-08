@@ -89,6 +89,7 @@ function OnboardingContent() {
   const [welcomeDone, setWelcomeDone] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
 
   // Handle cancel URL redirect back with ?step=plan
   useEffect(() => {
@@ -202,24 +203,36 @@ function OnboardingContent() {
     {
       id: 'starter',
       name: 'スターター',
-      price: '¥5,000',
-      period: '/月',
-      features: ['月50枚生成', '標準画質', 'メールサポート'],
+      monthlyPrice: '¥5,000',
+      yearlyPrice: '¥48,000',
+      period: billingInterval === 'year' ? '/年' : '/月',
+      features: ['月50枚画像生成', '動画生成なし', '標準画質', 'メールサポート'],
     },
     {
       id: 'pro',
       name: 'プロフェッショナル',
-      price: '¥20,000',
-      period: '/月',
-      features: ['無制限生成', '4K高画質', '優先サポート', '商用利用完全保証'],
+      monthlyPrice: '¥20,000',
+      yearlyPrice: '¥192,000',
+      period: billingInterval === 'year' ? '/年' : '/月',
+      features: ['月500枚画像生成', '月50本動画生成', '4K高画質', '優先サポート', '商用利用完全保証'],
       recommended: true,
+    },
+    {
+      id: 'business',
+      name: 'ビジネス',
+      monthlyPrice: '¥50,000',
+      yearlyPrice: '¥480,000',
+      period: billingInterval === 'year' ? '/年' : '/月',
+      features: ['月2,000枚画像生成', '月200本動画生成', '4K高画質', '専属サポート', '商用利用完全保証', 'API連携'],
     },
     {
       id: 'enterprise',
       name: 'エンタープライズ',
       price: '要相談',
+      monthlyPrice: '要相談',
+      yearlyPrice: '要相談',
       period: '',
-      features: ['API連携', '専属マネージャー', 'カスタムモデル'],
+      features: ['カスタム生成数', '専属マネージャー', 'カスタムモデル', 'API連携'],
     },
   ];
 
@@ -280,7 +293,7 @@ function OnboardingContent() {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, onboardingData }),
+        body: JSON.stringify({ planId, billingInterval, onboardingData }),
       });
 
       const data = await response.json();
@@ -808,11 +821,26 @@ function OnboardingContent() {
                   <p className="text-gray-500 text-sm">ビジネス規模に合わせた最適なプランをお選びください</p>
                 </div>
 
+                {/* Billing interval toggle */}
+                <div className="flex items-center justify-center gap-4 mb-2">
+                  <span className={`text-sm font-medium ${billingInterval === 'month' ? 'text-gray-900' : 'text-gray-400'}`}>月額</span>
+                  <button
+                    type="button"
+                    onClick={() => setBillingInterval(billingInterval === 'month' ? 'year' : 'month')}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${billingInterval === 'year' ? 'bg-black' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${billingInterval === 'year' ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <span className={`text-sm font-medium ${billingInterval === 'year' ? 'text-gray-900' : 'text-gray-400'}`}>
+                    年額<span className="ml-1 text-xs text-green-600 font-bold">20%OFF</span>
+                  </span>
+                </div>
+
                 <motion.div
                   variants={staggerContainer}
                   initial="enter"
                   animate="center"
-                  className="grid grid-cols-1 md:grid-cols-3 gap-6"
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
                 >
                   {plans.map((plan) => (
                     <motion.div
@@ -837,7 +865,9 @@ function OnboardingContent() {
                       )}
                       <h3 className="text-lg font-bold mb-2">{plan.name}</h3>
                       <div className="mb-6">
-                        <span className="text-3xl font-bold text-gray-900">{plan.price}</span>
+                        <span className="text-3xl font-bold text-gray-900">
+                          {billingInterval === 'year' ? plan.yearlyPrice : plan.monthlyPrice}
+                        </span>
                         <span className="text-sm">{plan.period}</span>
                       </div>
                       <ul className="space-y-3 mb-8 flex-1">

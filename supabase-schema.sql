@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   styles TEXT[],
   platforms TEXT[],
   plan TEXT DEFAULT 'starter',
+  billing_interval TEXT DEFAULT 'month',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

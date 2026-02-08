@@ -4,14 +4,19 @@ import { getStripe, PLAN_PRICES } from '@/utils/stripe';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { planId, onboardingData } = body;
+        const { planId, billingInterval = 'month', onboardingData } = body;
 
-        console.log('[checkout] Plan selected:', planId);
+        console.log('[checkout] Plan selected:', planId, 'interval:', billingInterval);
 
         // Validate plan
         const plan = PLAN_PRICES[planId];
         if (!plan) {
             return NextResponse.json({ error: 'Invalid plan selected' }, { status: 400 });
+        }
+
+        // Validate billing interval
+        if (billingInterval !== 'month' && billingInterval !== 'year') {
+            return NextResponse.json({ error: 'Invalid billing interval' }, { status: 400 });
         }
 
         // For Enterprise plan, redirect to contact
@@ -22,6 +27,12 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        const priceYen = billingInterval === 'year'
+            ? plan.yearlyPriceYen
+            : plan.monthlyPriceYen;
+
+        const intervalLabel = billingInterval === 'year' ? '年額' : '月額';
+
         // Create Stripe Checkout session
         const session = await getStripe().checkout.sessions.create({
             payment_method_types: ['card'],
@@ -31,12 +42,12 @@ export async function POST(request: NextRequest) {
                     price_data: {
                         currency: 'jpy',
                         product_data: {
-                            name: `生成 - ${plan.name}プラン`,
+                            name: `生成 - ${plan.name}プラン（${intervalLabel}）`,
                             description: plan.features.join('、'),
                         },
-                        unit_amount: plan.priceYen,
+                        unit_amount: priceYen,
                         recurring: {
-                            interval: 'month',
+                            interval: billingInterval,
                         },
                     },
                     quantity: 1,
@@ -45,6 +56,7 @@ export async function POST(request: NextRequest) {
             // Store onboarding data in metadata for webhook
             metadata: {
                 planId,
+                billingInterval,
                 brandName: onboardingData.brand?.name || '',
                 brandWebsite: onboardingData.brand?.website || '',
                 brandDescription: onboardingData.brand?.description || '',

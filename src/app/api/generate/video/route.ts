@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { createSegmindClient } from '@/utils/segmind';
 import { uploadVideoToStorage } from '@/utils/storage';
+import { canGenerateVideo } from '@/utils/plan-limits';
 
 export const maxDuration = 300; // Allow up to 5 minutes for video generation
 
@@ -13,6 +14,22 @@ export async function POST(request: NextRequest) {
 
         if (authError || !user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Check video generation quota
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: profile } = await (supabase as any)
+            .from('profiles')
+            .select('plan')
+            .eq('id', user.id)
+            .single();
+        const userPlan = profile?.plan || 'starter';
+        const allowed = await canGenerateVideo(supabase, user.id, userPlan);
+        if (!allowed) {
+            return NextResponse.json(
+                { error: '今月の動画生成上限に達しました。プランをアップグレードしてください。' },
+                { status: 403 },
+            );
         }
 
         const body = await request.json();
