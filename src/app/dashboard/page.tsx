@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   Image as ImageIcon,
+  Video,
   Users,
   Megaphone,
   ArrowUpRight,
@@ -37,7 +38,8 @@ type CampaignRow = {
 export default function Dashboard() {
   const supabase = createClient();
 
-  const [generationCount, setGenerationCount] = useState(0);
+  const [imageCount, setImageCount] = useState(0);
+  const [videoCount, setVideoCount] = useState(0);
   const [modelCount, setModelCount] = useState(0);
   const [activeCampaignCount, setActiveCampaignCount] = useState(0);
   const [latestGenerations, setLatestGenerations] = useState<Generation[]>([]);
@@ -51,14 +53,22 @@ export default function Dashboard() {
       if (!user) { setLoading(false); return; }
 
       // Fetch all stats in parallel
-      const [generationsRes, modelsRes, campaignsRes, latestRes] = await Promise.all([
-        // Count generations this month
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const [generationsRes, videoRes, modelsRes, campaignsRes, latestRes] = await Promise.all([
+        // Count image generations this month
         supabase
           .from('generations')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id)
           .eq('status', 'completed')
-          .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+          .gte('created_at', monthStart),
+        // Count video generations this month
+        supabase
+          .from('video_generations')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('status', 'completed')
+          .gte('created_at', monthStart),
         // Fetch models
         supabase
           .from('ai_models')
@@ -79,7 +89,8 @@ export default function Dashboard() {
           .limit(4),
       ]);
 
-      setGenerationCount(generationsRes.count ?? 0);
+      setImageCount(generationsRes.count ?? 0);
+      setVideoCount(videoRes.count ?? 0);
       setModelCount(modelsRes.data?.length ?? 0);
       setActiveCampaignCount(
         (campaignsRes.data ?? []).filter((c: CampaignRow) => c.status === 'active').length
@@ -135,8 +146,33 @@ export default function Dashboard() {
 
       {/* Stats Row — 3 metric cards + 1 "Top Model" visual card */}
       <div className="grid grid-cols-4 gap-4 mb-6">
+        {/* Generation counts card — images & videos */}
+        <div className="bg-white p-5 rounded-xl border border-gray-200/60 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-md transition-shadow">
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4">今月の生成数</p>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
+                <ImageIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-2xl font-black text-gray-900 tracking-tight leading-none">{imageCount}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">画像</p>
+              </div>
+            </div>
+            <div className="w-px h-10 bg-gray-100" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-fuchsia-50 text-fuchsia-600">
+                <Video className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-2xl font-black text-gray-900 tracking-tight leading-none">{videoCount}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">動画</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {[
-          { label: '今月の生成枚数', value: String(generationCount), icon: ImageIcon, accent: 'bg-violet-50 text-violet-600' },
           { label: '登録モデル数', value: String(modelCount), icon: Users, accent: 'bg-sky-50 text-sky-600' },
           { label: 'キャンペーン (実施中)', value: String(activeCampaignCount), icon: Megaphone, accent: 'bg-amber-50 text-amber-600' },
         ].map((stat, i) => (
