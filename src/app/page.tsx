@@ -59,6 +59,7 @@ export default function Home() {
             </div>
             <span className="text-lg sm:text-xl font-bold tracking-tighter">生成</span>
             <span className="text-[10px] text-gray-400 tracking-widest ml-1 mt-1 hidden sm:inline">SEISEI</span>
+            <span className="text-[10px] text-gray-400 ml-1 mt-1 hidden sm:inline">by 合同会社はと</span>
           </div>
           <div className="flex items-center gap-3 sm:gap-6">
             <Link href="/demo" className="text-sm text-gray-500 hover:text-black transition-colors hidden md:block">デモ</Link>
@@ -462,6 +463,11 @@ export default function Home() {
               <Sparkles className="w-3 h-3 text-white" />
             </div>
             <span className="text-sm font-bold tracking-tighter">生成</span>
+            <span className="text-[10px] text-gray-400">by 合同会社はと</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/tokushoho" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">特定商取引法に基づく表記</Link>
+            <Link href="/terms" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">利用規約</Link>
           </div>
           <p className="text-xs text-gray-300">
             © 2026 Seisei AI. All rights reserved.
