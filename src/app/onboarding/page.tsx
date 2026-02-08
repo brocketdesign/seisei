@@ -228,7 +228,6 @@ function OnboardingContent() {
     {
       id: 'enterprise',
       name: 'エンタープライズ',
-      price: '要相談',
       monthlyPrice: '要相談',
       yearlyPrice: '要相談',
       period: '',
