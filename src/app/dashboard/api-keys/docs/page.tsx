@@ -153,7 +153,7 @@ const endpoints: Endpoint[] = [
         title: 'Create Model',
         titleJa: 'モデル登録',
         description: 'Register a new AI model with a face photo for use in image generation and face-swap.',
-        status: 'coming-soon',
+        status: 'live',
         icon: <Users className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
         headers: {
@@ -193,7 +193,7 @@ const endpoints: Endpoint[] = [
         title: 'List Models',
         titleJa: 'モデル一覧',
         description: 'Retrieve all AI models registered to your account.',
-        status: 'coming-soon',
+        status: 'live',
         icon: <Users className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
         queryParams: [
@@ -213,14 +213,14 @@ const endpoints: Endpoint[] = [
         }, null, 2),
     },
 
-    // === Image Generation ===
+    // === Virtual Try-On ===
     {
         method: 'POST',
-        path: '/api/v1/generate/image',
-        title: 'Generate Image',
-        titleJa: '画像生成',
-        description: 'Generate an AI fashion image. Supports virtual try-on, model generation, full pipeline, and face-swap modes.',
-        status: 'coming-soon',
+        path: '/api/v1/generate/virtual-tryon',
+        title: 'Virtual Try-On',
+        titleJa: 'バーチャル試着',
+        description: 'Takes a product/outfit image and a model image, generates the model wearing the outfit using SegFit v1.3.',
+        status: 'live',
         icon: <ImageIcon className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
         headers: {
@@ -228,32 +228,31 @@ const endpoints: Endpoint[] = [
             'Content-Type': 'application/json',
         },
         bodyParams: [
-            { name: 'mode', type: "'tryon' | 'generate' | 'faceswap' | 'full-pipeline'", required: true, description: 'Generation mode.' },
-            { name: 'outfitImage', type: 'string', required: false, description: 'Base64 data URI of the garment/outfit image (required for tryon & full-pipeline).' },
-            { name: 'modelImage', type: 'string', required: false, description: 'Base64 data URI or URL of the model image.' },
-            { name: 'sourceImage', type: 'string', required: false, description: 'Source face image for face-swap mode.' },
-            { name: 'targetImage', type: 'string', required: false, description: 'Target image for face-swap mode.' },
-            { name: 'prompt', type: 'string', required: false, description: 'Text prompt for model generation.' },
-            { name: 'aspectRatio', type: "'1:1' | '4:5' | '9:16'", required: false, description: "Output aspect ratio (default: '1:1')." },
+            { name: 'outfitImage', type: 'string', required: true, description: 'Base64 data URI of the garment/outfit image.' },
+            { name: 'modelImage', type: 'string', required: true, description: 'Base64 data URI or public URL of the model image.' },
             { name: 'campaignId', type: 'string', required: false, description: 'Campaign UUID to associate the generation with.' },
-            { name: 'background', type: 'string', required: false, description: 'Background selection (e.g. studio, outdoor, custom URL).' },
-            { name: 'modelData', type: 'object', required: false, description: 'AI model roster reference { id, name, age, ethnicity, bodyType, tags, avatar }.' },
+            { name: 'aspectRatio', type: "'1:1' | '4:5' | '9:16'", required: false, description: "Output aspect ratio (default: '1:1')." },
         ],
         requestExample: JSON.stringify({
-            mode: 'tryon',
             outfitImage: 'data:image/png;base64,iVBOR...',
             modelImage: 'https://storage.seisei.me/models/model-a.jpg',
             aspectRatio: '4:5',
             campaignId: '550e8400-e29b-41d4-a716-446655440000',
         }, null, 2),
         responseExample: JSON.stringify({
-            generation: {
-                id: '770e8400-e29b-41d4-a716-446655440020',
-                generated_image_url: 'https://storage.seisei.me/generations/...',
-                status: 'completed',
-                mode: 'tryon',
-            },
+            success: true,
+            image_url: 'https://storage.seisei.me/generations/...',
+            generation_id: '770e8400-e29b-41d4-a716-446655440020',
+            generation_time: '2.3s',
+            credits_used: 1,
         }, null, 2),
+        curlExample: `curl -X POST https://seisei.me/api/v1/generate/virtual-tryon \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "outfitImage": "data:image/png;base64,iVBOR...",
+    "modelImage": "https://storage.seisei.me/models/model-a.jpg"
+  }'`,
     },
 
     // === Face Swap ===
@@ -263,7 +262,7 @@ const endpoints: Endpoint[] = [
         title: 'Face Swap',
         titleJa: 'フェイススワップ',
         description: 'Swap a face from a source image onto a target image. Useful for applying a model\'s face to generated content.',
-        status: 'coming-soon',
+        status: 'live',
         icon: <Repeat className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
         headers: {
@@ -271,21 +270,182 @@ const endpoints: Endpoint[] = [
             'Content-Type': 'application/json',
         },
         bodyParams: [
-            { name: 'sourceImage', type: 'string', required: true, description: 'Base64 data URI of the face source image.' },
-            { name: 'targetImage', type: 'string', required: true, description: 'Base64 data URI of the target image.' },
+            { name: 'sourceImage', type: 'string', required: true, description: 'Base64 data URI or URL of the face source image.' },
+            { name: 'targetImage', type: 'string', required: true, description: 'Base64 data URI or URL of the target image.' },
+            { name: 'campaignId', type: 'string', required: false, description: 'Campaign UUID to associate the generation with.' },
         ],
         requestExample: JSON.stringify({
             sourceImage: 'data:image/jpeg;base64,/9j/4AAQ...',
             targetImage: 'data:image/jpeg;base64,/9j/4AAQ...',
         }, null, 2),
         responseExample: JSON.stringify({
-            generation: {
-                id: '880e8400-e29b-41d4-a716-446655440030',
-                generated_image_url: 'https://storage.seisei.me/generations/...',
-                status: 'completed',
-                mode: 'faceswap',
+            success: true,
+            image_url: 'https://storage.seisei.me/generations/...',
+            generation_id: '880e8400-e29b-41d4-a716-446655440030',
+            generation_time: '1.8s',
+            credits_used: 1,
+        }, null, 2),
+        curlExample: `curl -X POST https://seisei.me/api/v1/generate/faceswap \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "sourceImage": "data:image/jpeg;base64,/9j/4AAQ...",
+    "targetImage": "data:image/jpeg;base64,/9j/4AAQ..."
+  }'`,
+    },
+
+    // === Editorial (Full Pipeline) ===
+    {
+        method: 'POST',
+        path: '/api/v1/generate/editorial',
+        title: 'Editorial / Full Pipeline',
+        titleJa: 'エディトリアル生成',
+        description: 'Full editorial pipeline: generates an AI model, applies face-swap (if avatar provided), and performs virtual try-on with the outfit.',
+        status: 'live',
+        icon: <ImageIcon className="w-4 h-4" />,
+        auth: 'Bearer sk_live_...',
+        headers: {
+            'Authorization': 'Bearer sk_live_...',
+            'Content-Type': 'application/json',
+        },
+        bodyParams: [
+            { name: 'outfitImage', type: 'string', required: true, description: 'Base64 data URI of the garment/outfit image.' },
+            { name: 'modelId', type: 'string', required: false, description: 'UUID of an existing AI model to use.' },
+            { name: 'modelData', type: 'object', required: false, description: 'Inline model attributes { id, name, age, ethnicity, bodyType, tags, avatar, sex }.' },
+            { name: 'background', type: "'studio' | 'outdoor' | 'cafe' | 'natural'", required: false, description: "Background style (default: 'studio')." },
+            { name: 'aspectRatio', type: "'1:1' | '4:5' | '9:16'", required: false, description: "Output aspect ratio (default: '1:1')." },
+            { name: 'campaignId', type: 'string', required: false, description: 'Campaign UUID to associate the generation with.' },
+        ],
+        requestExample: JSON.stringify({
+            outfitImage: 'data:image/png;base64,iVBOR...',
+            modelId: '660e8400-e29b-41d4-a716-446655440010',
+            background: 'studio',
+            aspectRatio: '4:5',
+            campaignId: '550e8400-e29b-41d4-a716-446655440000',
+        }, null, 2),
+        responseExample: JSON.stringify({
+            success: true,
+            image_url: 'https://storage.seisei.me/generations/...',
+            generation_id: '770e8400-e29b-41d4-a716-446655440020',
+            generation_time: '8.5s',
+            credits_used: 1,
+        }, null, 2),
+        curlExample: `curl -X POST https://seisei.me/api/v1/generate/editorial \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "outfitImage": "data:image/png;base64,iVBOR...",
+    "modelId": "660e8400-e29b-41d4-a716-446655440010",
+    "background": "studio"
+  }'`,
+    },
+
+    // === Campaigns ===
+    {
+        method: 'GET',
+        path: '/api/v1/campaigns',
+        title: 'List Campaigns',
+        titleJa: 'キャンペーン一覧',
+        description: 'Retrieve all campaigns for your account, optionally filtered by status.',
+        status: 'live',
+        icon: <Package className="w-4 h-4" />,
+        auth: 'Bearer sk_live_...',
+        queryParams: [
+            { name: 'status', type: 'string', required: false, description: "Filter by status ('draft' | 'active' | 'scheduled' | 'completed')." },
+            { name: 'limit', type: 'number', required: false, description: 'Max number of results (default: 50).' },
+            { name: 'offset', type: 'number', required: false, description: 'Pagination offset.' },
+        ],
+        responseExample: JSON.stringify({
+            campaigns: [
+                {
+                    id: '550e8400-e29b-41d4-a716-446655440000',
+                    name: '春コレクション 2026',
+                    description: 'Spring collection campaign',
+                    status: 'active',
+                    created_at: '2026-01-15T00:00:00.000Z',
+                },
+            ],
+            total: 1,
+        }, null, 2),
+        curlExample: `curl -X GET "https://seisei.me/api/v1/campaigns?status=active" \\
+  -H "Authorization: Bearer sk_live_..."`,
+    },
+    {
+        method: 'GET',
+        path: '/api/v1/campaigns/:id',
+        title: 'Get Campaign',
+        titleJa: 'キャンペーン詳細',
+        description: 'Get a single campaign by ID, including its products and generation count.',
+        status: 'live',
+        icon: <Package className="w-4 h-4" />,
+        auth: 'Bearer sk_live_...',
+        responseExample: JSON.stringify({
+            campaign: {
+                id: '550e8400-e29b-41d4-a716-446655440000',
+                name: '春コレクション 2026',
+                status: 'active',
+                products: [
+                    { id: '...', name: 'オーバーサイズTシャツ', image_url: '...' },
+                ],
+                generation_count: 12,
             },
         }, null, 2),
+        curlExample: `curl -X GET "https://seisei.me/api/v1/campaigns/550e8400-e29b-41d4-a716-446655440000" \\
+  -H "Authorization: Bearer sk_live_..."`,
+    },
+    {
+        method: 'POST',
+        path: '/api/v1/campaigns',
+        title: 'Create Campaign',
+        titleJa: 'キャンペーン作成',
+        description: 'Create a new campaign via API.',
+        status: 'coming-soon',
+        icon: <Package className="w-4 h-4" />,
+        auth: 'Bearer sk_live_...',
+    },
+
+    // === Email Generate ===
+    {
+        method: 'POST',
+        path: '/api/v1/email/generate',
+        title: 'Generate Email',
+        titleJa: 'メール生成',
+        description: 'Generate marketing email HTML from campaign/product data. Optionally send immediately.',
+        status: 'live',
+        icon: <Mail className="w-4 h-4" />,
+        auth: 'Bearer sk_live_...',
+        headers: {
+            'Authorization': 'Bearer sk_live_...',
+            'Content-Type': 'application/json',
+        },
+        bodyParams: [
+            { name: 'subject', type: 'string', required: true, description: 'Email subject line.' },
+            { name: 'campaignId', type: 'string', required: false, description: 'UUID of the campaign to pull data from.' },
+            { name: 'productId', type: 'string', required: false, description: 'UUID of the product to feature.' },
+            { name: 'to', type: 'string | string[]', required: false, description: 'Recipient(s) — if provided, email is sent immediately.' },
+            { name: 'templateStyle', type: "'minimal' | 'editorial' | 'promotional'", required: false, description: "Template style (default: 'minimal')." },
+            { name: 'customHtml', type: 'string', required: false, description: 'Custom HTML body (skips template generation).' },
+            { name: 'replyTo', type: 'string', required: false, description: 'Reply-to email address.' },
+        ],
+        requestExample: JSON.stringify({
+            subject: '春コレクション新作のお知らせ',
+            campaignId: '550e8400-e29b-41d4-a716-446655440000',
+            productId: '550e8400-e29b-41d4-a716-446655440001',
+            to: 'customer@example.com',
+        }, null, 2),
+        responseExample: JSON.stringify({
+            success: true,
+            sent: true,
+            id: 'msg_01abc123def456',
+            html: '<!DOCTYPE html><html>...</html>',
+        }, null, 2),
+        curlExample: `curl -X POST https://seisei.me/api/v1/email/generate \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "subject": "春コレクション新作のお知らせ",
+    "campaignId": "550e8400-e29b-41d4-a716-446655440000"
+  }'`,
     },
 
     // === Video Generation ===
