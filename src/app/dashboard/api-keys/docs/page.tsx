@@ -9,6 +9,7 @@ import {
     Users,
     Image as ImageIcon,
     Video,
+    Search,
     Repeat,
     Copy,
     Check,
@@ -485,6 +486,53 @@ const endpoints: Endpoint[] = [
                 duration: 5,
             },
         }, null, 2),
+    },
+
+    // === List Generations ===
+    {
+        method: 'GET',
+        path: '/api/v1/generations',
+        title: 'List Generations',
+        titleJa: '生成メディア一覧',
+        description: 'Query generated media (images and videos) with filtering by model, campaign, status, and date range.',
+        status: 'live',
+        icon: <Search className="w-4 h-4" />,
+        auth: 'Bearer sk_live_...',
+        queryParams: [
+            { name: 'type', type: "'images' | 'videos'", required: false, description: "Media type to query — 'images' (default) queries the generations table, 'videos' queries the video_generations table." },
+            { name: 'model_id', type: 'string', required: false, description: 'Filter by AI model UUID.' },
+            { name: 'campaign_id', type: 'string', required: false, description: 'Filter by campaign UUID.' },
+            { name: 'status', type: "'pending' | 'processing' | 'completed' | 'failed'", required: false, description: 'Filter by generation status.' },
+            { name: 'date_from', type: 'string', required: false, description: 'ISO 8601 date — only results created on or after this date.' },
+            { name: 'date_to', type: 'string', required: false, description: 'ISO 8601 date — only results created on or before this date.' },
+            { name: 'limit', type: 'number', required: false, description: 'Max number of results (default: 50, max: 100).' },
+            { name: 'offset', type: 'number', required: false, description: 'Pagination offset (default: 0).' },
+        ],
+        responseExample: JSON.stringify({
+            type: 'images',
+            generations: [
+                {
+                    id: '770e8400-e29b-41d4-a716-446655440020',
+                    generated_image_url: 'https://storage.seisei.me/generations/...',
+                    original_image_url: 'https://storage.seisei.me/originals/...',
+                    model_type: 'editorial',
+                    background: 'studio',
+                    aspect_ratio: '4:5',
+                    status: 'completed',
+                    ai_model_id: '660e8400-e29b-41d4-a716-446655440010',
+                    campaign_id: '550e8400-e29b-41d4-a716-446655440000',
+                    created_at: '2026-01-20T12:00:00.000Z',
+                },
+            ],
+            total: 1,
+        }, null, 2),
+        curlExample: `# Last 10 completed images for a model
+curl -X GET "https://seisei.me/api/v1/generations?model_id=660e8400-e29b-41d4-a716-446655440010&status=completed&limit=10" \\
+  -H "Authorization: Bearer sk_live_..."
+
+# Videos for a campaign in January
+curl -X GET "https://seisei.me/api/v1/generations?type=videos&campaign_id=550e8400-e29b-41d4-a716-446655440000&date_from=2026-01-01&date_to=2026-01-31" \\
+  -H "Authorization: Bearer sk_live_..."`,
     },
 ];
 
