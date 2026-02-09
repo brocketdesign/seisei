@@ -15,6 +15,10 @@ import {
   EyeOff,
   Lock,
   Mail,
+  ArrowUpRight,
+  Sparkles,
+  ChevronRight,
+  X,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { PLAN_PRICES } from '@/utils/plans';
@@ -236,12 +240,45 @@ function ProfileSettings() {
   );
 }
 
+// ─── Plan hierarchy ────────────────────────────────────────────────
+const PLAN_ORDER = ['starter', 'pro', 'business', 'enterprise'];
+
 // ─── Billing Settings ──────────────────────────────────────────────
 function BillingSettings() {
   const supabase = createClient();
+  const { toast, showToast, clearToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<string>('starter');
+  const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const [usage, setUsage] = useState({ images: 0, videos: 0 });
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedUpgradePlan, setSelectedUpgradePlan] = useState<string | null>(null);
+  const [prorationPreview, setProrationPreview] = useState<{
+    proratedAmount: number;
+    daysRemaining: number;
+    totalDays: number;
+    fullPriceDifference: number;
+    currentPlan: { name: string; price: number };
+    targetPlan: { name: string; price: number };
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+
+  // Check for upgrade success/cancelled query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const upgradeStatus = params.get('upgrade');
+    const upgradedPlan = params.get('plan');
+    if (upgradeStatus === 'success' && upgradedPlan) {
+      showToast(`${PLAN_PRICES[upgradedPlan]?.name ?? upgradedPlan}プランにアップグレードしました！`, 'success');
+      // Clean up URL
+      window.history.replaceState({}, '', '/dashboard/settings');
+    } else if (upgradeStatus === 'cancelled') {
+      showToast('アップグレードがキャンセルされました', 'error');
+      window.history.replaceState({}, '', '/dashboard/settings');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -251,11 +288,12 @@ function BillingSettings() {
       // Fetch plan
       const { data: profile } = await supabase
         .from('profiles')
-        .select('plan')
+        .select('plan, billing_interval')
         .eq('id', user.id)
         .single();
       const currentPlan = profile?.plan ?? 'starter';
       setPlan(currentPlan);
+      setBillingInterval((profile?.billing_interval ?? 'month') as 'month' | 'year');
 
       // Fetch usage this billing period
       const periodStart = new Date(
@@ -280,10 +318,84 @@ function BillingSettings() {
     })();
   }, [supabase]);
 
+  // Fetch proration preview when a plan is selected
+  const fetchProrationPreview = async (targetPlanId: string) => {
+    setPreviewLoading(true);
+    setProrationPreview(null);
+    try {
+      const res = await fetch(`/api/stripe/upgrade?targetPlanId=${targetPlanId}`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to fetch preview');
+      }
+      const data = await res.json();
+      setProrationPreview(data);
+    } catch (err) {
+      console.error('Proration preview error:', err);
+      showToast('プレビューの取得に失敗しました', 'error');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleSelectUpgradePlan = (targetPlanId: string) => {
+    setSelectedUpgradePlan(targetPlanId);
+    setShowUpgradeModal(true);
+    fetchProrationPreview(targetPlanId);
+  };
+
+  const handleUpgrade = async () => {
+    if (!selectedUpgradePlan) return;
+    setUpgrading(true);
+    try {
+      const res = await fetch('/api/stripe/upgrade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetPlanId: selectedUpgradePlan }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Upgrade failed');
+      }
+
+      // If upgraded immediately (0 cost)
+      if (data.upgraded) {
+        setPlan(selectedUpgradePlan);
+        setShowUpgradeModal(false);
+        showToast(data.message, 'success');
+        return;
+      }
+
+      // If enterprise
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+        return;
+      }
+
+      // Redirect to Stripe checkout
+      if (data.sessionUrl) {
+        window.location.href = data.sessionUrl;
+      }
+    } catch (err) {
+      console.error('Upgrade error:', err);
+      showToast('アップグレードに失敗しました。もう一度お試しください。', 'error');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
   if (loading) return <SettingsCardSkeleton rows={3} />;
 
   const planConfig = PLAN_PRICES[plan] ?? PLAN_PRICES.starter;
   const limits = planConfig.limits;
+  const currentPlanIndex = PLAN_ORDER.indexOf(plan);
+
+  // Available upgrade plans (higher tier only)
+  const upgradePlans = PLAN_ORDER.filter((_, i) => i > currentPlanIndex)
+    .map(id => ({ id, ...PLAN_PRICES[id] }))
+    .filter(p => p.name); // Ensure valid plan
 
   const formatLimit = (used: number, limit: number) =>
     limit === -1 ? `${used} / 無制限` : `${used} / ${limit.toLocaleString()}`;
@@ -306,7 +418,9 @@ function BillingSettings() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 bg-gray-50 rounded-xl border border-gray-200 gap-3">
           <div>
             <p className="font-bold text-base sm:text-lg text-gray-900">{planConfig.name}</p>
-            <p className="text-xs sm:text-sm text-gray-500">¥{planConfig.monthlyPriceYen.toLocaleString()} / 月</p>
+            <p className="text-xs sm:text-sm text-gray-500">
+              ¥{(billingInterval === 'year' ? planConfig.yearlyPriceYen : planConfig.monthlyPriceYen).toLocaleString()} / {billingInterval === 'year' ? '年' : '月'}
+            </p>
           </div>
           <span className="self-start sm:self-center px-3 py-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 rounded-full">有効</span>
         </div>
@@ -348,6 +462,73 @@ function BillingSettings() {
         </div>
       </div>
 
+      {/* Upgrade Plans */}
+      {upgradePlans.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <h3 className="font-bold text-gray-900">プランをアップグレード</h3>
+          </div>
+          <p className="text-xs sm:text-sm text-gray-500 mb-4 sm:mb-6">
+            上位プランにアップグレードすると、残りの日数分の差額のみお支払いいただきます。
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+            {upgradePlans.map(targetPlan => {
+              const targetPrice = billingInterval === 'year' ? targetPlan.yearlyPriceYen : targetPlan.monthlyPriceYen;
+              const currentPrice = billingInterval === 'year' ? planConfig.yearlyPriceYen : planConfig.monthlyPriceYen;
+              const priceDiff = targetPrice - currentPrice;
+
+              return (
+                <div
+                  key={targetPlan.id}
+                  className="relative border border-gray-200 rounded-xl p-4 sm:p-5 hover:border-black/30 hover:shadow-md transition-all group"
+                >
+                  {targetPlan.id === 'pro' && (
+                    <span className="absolute -top-2.5 left-4 px-2 py-0.5 text-[10px] font-bold bg-black text-white rounded-full">
+                      人気
+                    </span>
+                  )}
+                  <div className="mb-3">
+                    <h4 className="font-bold text-gray-900">{targetPlan.name}</h4>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      ¥{targetPrice.toLocaleString()} / {billingInterval === 'year' ? '年' : '月'}
+                    </p>
+                  </div>
+
+                  <div className="text-xs text-gray-500 mb-3 pb-3 border-b border-gray-100">
+                    <span className="text-green-600 font-medium">+¥{priceDiff.toLocaleString()}</span> / {billingInterval === 'year' ? '年' : '月'} の差額
+                  </div>
+
+                  <ul className="space-y-1.5 mb-4">
+                    {targetPlan.features.slice(0, 3).map((f, i) => (
+                      <li key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                    {targetPlan.features.length > 3 && (
+                      <li className="text-xs text-gray-400">他 {targetPlan.features.length - 3} 件の機能</li>
+                    )}
+                  </ul>
+
+                  <button
+                    onClick={() => targetPlan.id === 'enterprise' ? window.location.href = '/contact' : handleSelectUpgradePlan(targetPlan.id)}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors group-hover:shadow-lg group-hover:shadow-black/10"
+                  >
+                    {targetPlan.id === 'enterprise' ? (
+                      <>お問い合わせ<ChevronRight className="w-3.5 h-3.5" /></>
+                    ) : (
+                      <>アップグレード<ArrowUpRight className="w-3.5 h-3.5" /></>
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Plan features */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6">
         <h3 className="font-bold text-gray-900 mb-4">プランの機能</h3>
@@ -359,6 +540,166 @@ function BillingSettings() {
             </li>
           ))}
         </ul>
+      </div>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && selectedUpgradePlan && (
+        <UpgradeModal
+          targetPlanId={selectedUpgradePlan}
+          prorationPreview={prorationPreview}
+          previewLoading={previewLoading}
+          upgrading={upgrading}
+          billingInterval={billingInterval}
+          onConfirm={handleUpgrade}
+          onClose={() => {
+            setShowUpgradeModal(false);
+            setSelectedUpgradePlan(null);
+            setProrationPreview(null);
+          }}
+        />
+      )}
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={clearToast} />}
+    </div>
+  );
+}
+
+// ─── Upgrade Confirmation Modal ────────────────────────────────────
+function UpgradeModal({
+  targetPlanId,
+  prorationPreview,
+  previewLoading,
+  upgrading,
+  billingInterval,
+  onConfirm,
+  onClose,
+}: {
+  targetPlanId: string;
+  prorationPreview: {
+    proratedAmount: number;
+    daysRemaining: number;
+    totalDays: number;
+    fullPriceDifference: number;
+    currentPlan: { name: string; price: number };
+    targetPlan: { name: string; price: number };
+  } | null;
+  previewLoading: boolean;
+  upgrading: boolean;
+  billingInterval: 'month' | 'year';
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const targetPlan = PLAN_PRICES[targetPlanId];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-scale-up">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-500" />
+            <h3 className="font-bold text-gray-900">プランアップグレード</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-5 space-y-4">
+          {previewLoading ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              <p className="text-sm text-gray-500">差額を計算中...</p>
+            </div>
+          ) : prorationPreview ? (
+            <>
+              {/* Plan transition */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl gap-3">
+                <div className="text-center flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">現在のプラン</p>
+                  <p className="font-bold text-gray-900 text-sm">{prorationPreview.currentPlan.name}</p>
+                  <p className="text-xs text-gray-500">¥{prorationPreview.currentPlan.price.toLocaleString()}/{billingInterval === 'year' ? '年' : '月'}</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                <div className="text-center flex-1">
+                  <p className="text-xs text-gray-500 mb-0.5">新しいプラン</p>
+                  <p className="font-bold text-gray-900 text-sm">{prorationPreview.targetPlan.name}</p>
+                  <p className="text-xs text-gray-500">¥{prorationPreview.targetPlan.price.toLocaleString()}/{billingInterval === 'year' ? '年' : '月'}</p>
+                </div>
+              </div>
+
+              {/* Proration breakdown */}
+              <div className="space-y-2.5 p-4 bg-amber-50/50 rounded-xl border border-amber-100">
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-600">{billingInterval === 'year' ? '年額' : '月額'}差額</span>
+                  <span className="text-gray-900">¥{prorationPreview.fullPriceDifference.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm">
+                  <span className="text-gray-600">残り日数</span>
+                  <span className="text-gray-900">{prorationPreview.daysRemaining}日 / {prorationPreview.totalDays}日</span>
+                </div>
+                <div className="border-t border-amber-200 pt-2.5 flex justify-between">
+                  <span className="font-medium text-gray-900 text-sm">日割りお支払い額</span>
+                  <span className="font-bold text-lg text-gray-900">¥{prorationPreview.proratedAmount.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="flex gap-2 p-3 bg-blue-50 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  今月の残り{prorationPreview.daysRemaining}日分の差額のみお支払いいただきます。来月からは{prorationPreview.targetPlan.name}プランの{billingInterval === 'year' ? '年額' : '月額'}（¥{prorationPreview.targetPlan.price.toLocaleString()}）が適用されます。
+                </p>
+              </div>
+
+              {/* Features preview */}
+              {targetPlan && (
+                <div>
+                  <p className="text-xs font-medium text-gray-700 mb-2">アップグレードで追加される機能:</p>
+                  <ul className="space-y-1">
+                    {targetPlan.features.map((f, i) => (
+                      <li key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
+                        <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-6">
+              <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+              <p className="text-sm text-gray-600">プレビューの取得に失敗しました。</p>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="p-5 border-t border-gray-100 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={previewLoading || upgrading || !prorationPreview}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors shadow-lg shadow-black/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {upgrading ? (
+              <><Loader2 className="w-4 h-4 animate-spin" />処理中...</>
+            ) : (
+              <><CreditCard className="w-4 h-4" />お支払いへ進む</>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

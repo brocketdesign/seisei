@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session;
 
         try {
-            await handleCheckoutCompleted(session);
+            // Check if this is a plan upgrade payment
+            if (session.metadata?.type === 'plan_upgrade') {
+                await handlePlanUpgrade(session);
+            } else {
+                await handleCheckoutCompleted(session);
+            }
         } catch (error) {
             console.error('Error handling checkout completion:', error);
             return NextResponse.json({ error: 'Failed to process checkout' }, { status: 500 });
@@ -49,6 +54,33 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ received: true });
+}
+
+async function handlePlanUpgrade(session: Stripe.Checkout.Session) {
+    const metadata = session.metadata || {};
+    const userId = metadata.userId;
+    const targetPlanId = metadata.targetPlanId;
+    const billingInterval = metadata.billingInterval || 'month';
+
+    if (!userId || !targetPlanId) {
+        throw new Error('Missing userId or targetPlanId in upgrade metadata');
+    }
+
+    console.log('[webhook] Processing plan upgrade for user:', userId, '→', targetPlanId);
+
+    // Update the user's plan in their profile
+    const { error } = await supabaseAdmin.from('profiles').update({
+        plan: targetPlanId,
+        billing_interval: billingInterval,
+        updated_at: new Date().toISOString(),
+    }).eq('id', userId);
+
+    if (error) {
+        console.error('[webhook] Error upgrading plan:', error);
+        throw error;
+    }
+
+    console.log('[webhook] Plan upgrade completed:', userId, '→', targetPlanId);
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
@@ -159,7 +191,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 }
 
 async function updateUserProfile(userId: string, metadata: Record<string, string>) {
-    const { error } = await supabaseAdmin.from('profiles').upsert({
+    const profileData = {
         id: userId,
         brand_name: metadata.brandName || null,
         website: metadata.brandWebsite || null,
@@ -173,11 +205,22 @@ async function updateUserProfile(userId: string, metadata: Record<string, string
         plan: metadata.planId || 'starter',
         billing_interval: metadata.billingInterval || 'month',
         updated_at: new Date().toISOString(),
-    });
+    };
+
+    const { error } = await supabaseAdmin.from('profiles').upsert(profileData);
 
     if (error) {
-        console.error('Error updating profile:', error);
-        throw error;
+        console.error('Error upserting profile, trying update fallback:', error);
+        // Fallback: try update instead of upsert
+        const { id, ...updateData } = profileData;
+        const { error: updateError } = await supabaseAdmin
+            .from('profiles')
+            .update(updateData)
+            .eq('id', userId);
+        if (updateError) {
+            console.error('Error updating profile (fallback):', updateError);
+            throw updateError;
+        }
     }
 }
 
