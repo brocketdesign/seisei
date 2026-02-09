@@ -16,6 +16,9 @@ import {
   Edit3,
   Check,
   Loader2,
+  FileSpreadsheet,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -40,7 +43,7 @@ type Campaign = {
 };
 
 export default function ProductsPage() {
-  const [view, setView] = useState<'list' | 'add' | 'details'>('list');
+  const [view, setView] = useState<'list' | 'add' | 'details' | 'csv'>('list');
   const [products, setProducts] = useState<Product[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
@@ -119,6 +122,11 @@ export default function ProductsPage() {
     setView('list');
   };
 
+  const handleProductsImported = (imported: Product[]) => {
+    setProducts(prev => [...imported, ...prev]);
+    setView('list');
+  };
+
   const selectedCampaign = campaigns.find(c => c.id === selectedCampaignId);
 
   const filteredProducts = products.filter(p => {
@@ -135,13 +143,22 @@ export default function ProductsPage() {
           <p className="text-gray-500 mt-1 text-sm">キャンペーンに紐づく商品の登録・管理を行います</p>
         </div>
         {view === 'list' && (
-          <button
-            onClick={() => setView('add')}
-            className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-lg hover:bg-gray-800 transition-colors shadow-lg shadow-black/10 text-sm font-medium"
-          >
-            <Plus size={16} />
-            <span>商品を追加</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setView('csv')}
+              className="flex items-center gap-2 border border-gray-200 text-gray-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+            >
+              <FileSpreadsheet size={16} />
+              <span>CSVインポート</span>
+            </button>
+            <button
+              onClick={() => setView('add')}
+              className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-lg hover:bg-gray-800 transition-colors shadow-lg shadow-black/10 text-sm font-medium"
+            >
+              <Plus size={16} />
+              <span>商品を追加</span>
+            </button>
+          </div>
         )}
       </header>
 
@@ -168,6 +185,15 @@ export default function ProductsPage() {
             campaigns={campaigns}
             selectedCampaignId={selectedCampaignId}
             onProductAdded={handleProductAdded}
+          />
+        )}
+
+        {view === 'csv' && (
+          <CSVImportView
+            onBack={handleBack}
+            campaigns={campaigns}
+            selectedCampaignId={selectedCampaignId}
+            onProductsImported={handleProductsImported}
           />
         )}
 
@@ -828,6 +854,471 @@ function ProductDetailsView({
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// --- CSV Import ---
+
+type ParsedRow = {
+  name: string;
+  image_url: string;
+  description: string;
+  category: string;
+  tags: string;
+  valid: boolean;
+  error?: string;
+};
+
+function parseCSV(text: string): { headers: string[]; rows: string[][] } {
+  const lines: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      lines.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) lines.push(current);
+
+  const rows = lines.map(line => {
+    const cells: string[] = [];
+    let cell = '';
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (q && line[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          q = !q;
+        }
+      } else if (ch === ',' && !q) {
+        cells.push(cell);
+        cell = '';
+      } else {
+        cell += ch;
+      }
+    }
+    cells.push(cell);
+    return cells;
+  });
+
+  const headers = rows[0]?.map(h => h.trim().toLowerCase()) || [];
+  return { headers, rows: rows.slice(1) };
+}
+
+function CSVImportView({
+  onBack,
+  campaigns,
+  selectedCampaignId,
+  onProductsImported,
+}: {
+  onBack: () => void;
+  campaigns: Campaign[];
+  selectedCampaignId: string | null;
+  onProductsImported: (products: Product[]) => void;
+}) {
+  const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
+  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [campaignId, setCampaignId] = useState(selectedCampaignId || '');
+  const [importing, setImporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<{
+    success: number;
+    failed: Array<{ index: number; name: string; error: string }>;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = useCallback((file: File) => {
+    if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+      setError('CSVファイルのみアップロードできます。');
+      return;
+    }
+
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text?.trim()) {
+        setError('ファイルが空です。');
+        return;
+      }
+
+      const { headers, rows } = parseCSV(text);
+
+      // Validate headers
+      const nameIdx = headers.indexOf('name');
+      const imageIdx = headers.indexOf('image_url');
+
+      if (nameIdx === -1) {
+        setError('CSVに "name" 列が見つかりません。ヘッダー行に name を含めてください。');
+        return;
+      }
+      if (imageIdx === -1) {
+        setError('CSVに "image_url" 列が見つかりません。ヘッダー行に image_url を含めてください。');
+        return;
+      }
+
+      const descIdx = headers.indexOf('description');
+      const catIdx = headers.indexOf('category');
+      const tagsIdx = headers.indexOf('tags');
+
+      const parsed: ParsedRow[] = rows
+        .filter(row => row.some(cell => cell.trim()))
+        .map(row => {
+          const name = row[nameIdx]?.trim() || '';
+          const image_url = row[imageIdx]?.trim() || '';
+          const description = descIdx >= 0 ? row[descIdx]?.trim() || '' : '';
+          const category = catIdx >= 0 ? row[catIdx]?.trim() || '' : '';
+          const tags = tagsIdx >= 0 ? row[tagsIdx]?.trim() || '' : '';
+
+          let valid = true;
+          let errorMsg: string | undefined;
+
+          if (!name) {
+            valid = false;
+            errorMsg = '商品名が空です';
+          } else if (!image_url) {
+            valid = false;
+            errorMsg = '画像URLが空です';
+          }
+
+          return { name, image_url, description, category, tags, valid, error: errorMsg };
+        });
+
+      if (parsed.length === 0) {
+        setError('インポートできる行がありません。');
+        return;
+      }
+
+      setParsedRows(parsed);
+      setStep('preview');
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
+
+  const validCount = parsedRows.filter(r => r.valid).length;
+  const invalidCount = parsedRows.filter(r => !r.valid).length;
+
+  const handleImport = async () => {
+    if (!campaignId) {
+      setError('キャンペーンを選択してください。');
+      return;
+    }
+
+    const validRows = parsedRows.filter(r => r.valid);
+    if (validRows.length === 0) {
+      setError('有効な行がありません。');
+      return;
+    }
+
+    setImporting(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/products/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId,
+          products: validRows.map(r => ({
+            name: r.name,
+            image_url: r.image_url,
+            description: r.description || undefined,
+            category: r.category || undefined,
+            tags: r.tags || undefined,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'インポートに失敗しました。');
+        return;
+      }
+
+      setResults({
+        success: data.imported,
+        failed: data.failed || [],
+      });
+      setStep('done');
+
+      if (data.products?.length > 0) {
+        onProductsImported(data.products);
+      }
+    } catch {
+      setError('インポート中にエラーが発生しました。');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      <div className="flex items-center gap-2 mb-6 text-sm text-gray-500">
+        <button onClick={onBack} className="hover:text-black transition-colors">商品一覧</button>
+        <ChevronRight size={14} />
+        <span className="text-black font-medium">CSVインポート</span>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Upload Step */}
+        {step === 'upload' && (
+          <div className="p-8">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">CSVファイルをアップロード</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              商品データを含むCSVファイルを選択してください。
+            </p>
+
+            {/* Format guide */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-100">
+              <p className="text-xs font-bold text-gray-700 mb-2">CSV形式</p>
+              <p className="text-xs text-gray-500 mb-2">
+                ヘッダー行に以下の列名を含めてください（<span className="text-red-500">*</span> は必須）:
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="bg-white border border-gray-200 px-2 py-1 rounded font-mono">name<span className="text-red-500">*</span></span>
+                <span className="bg-white border border-gray-200 px-2 py-1 rounded font-mono">image_url<span className="text-red-500">*</span></span>
+                <span className="bg-white border border-gray-200 px-2 py-1 rounded font-mono">description</span>
+                <span className="bg-white border border-gray-200 px-2 py-1 rounded font-mono">category</span>
+                <span className="bg-white border border-gray-200 px-2 py-1 rounded font-mono">tags</span>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                例: name,image_url,description,category,tags
+              </p>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFile(file);
+              }}
+            />
+
+            <div
+              onDrop={handleDrop}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors cursor-pointer group ${
+                isDragging ? 'border-black bg-gray-50' : 'border-gray-200'
+              }`}
+            >
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-white group-hover:shadow-md transition-all">
+                <FileSpreadsheet className="text-gray-400 group-hover:text-black" size={24} />
+              </div>
+              <h3 className="font-bold text-gray-900 mb-1">CSVファイルをドラッグ＆ドロップ</h3>
+              <p className="text-sm text-gray-500 mb-6">または クリックしてファイルを選択</p>
+              <p className="text-xs text-gray-400">.csv ファイル</p>
+            </div>
+
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-xs text-red-600">{error}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Preview Step */}
+        {step === 'preview' && (
+          <div className="p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">プレビュー</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {parsedRows.length}件の商品が見つかりました
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1 text-green-600">
+                  <CheckCircle2 size={14} />
+                  {validCount}件 有効
+                </span>
+                {invalidCount > 0 && (
+                  <span className="flex items-center gap-1 text-red-500">
+                    <AlertCircle size={14} />
+                    {invalidCount}件 エラー
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Campaign selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-1">インポート先キャンペーン *</label>
+              <select
+                value={campaignId}
+                onChange={(e) => setCampaignId(e.target.value)}
+                className="w-full max-w-xs p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+              >
+                <option value="">選択してください</option>
+                {campaigns.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Preview table */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-3 w-12">#</th>
+                      <th className="px-4 py-3">商品名</th>
+                      <th className="px-4 py-3">画像URL</th>
+                      <th className="px-4 py-3">説明</th>
+                      <th className="px-4 py-3">カテゴリ</th>
+                      <th className="px-4 py-3">タグ</th>
+                      <th className="px-4 py-3 w-24">状態</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {parsedRows.map((row, i) => (
+                      <tr
+                        key={i}
+                        className={row.valid ? 'hover:bg-gray-50' : 'bg-red-50/50'}
+                      >
+                        <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900 max-w-[160px] truncate">{row.name || '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 max-w-[200px] truncate font-mono text-xs">{row.image_url || '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 max-w-[160px] truncate">{row.description || '—'}</td>
+                        <td className="px-4 py-3 text-gray-500">{row.category || '—'}</td>
+                        <td className="px-4 py-3 text-gray-500 max-w-[120px] truncate">{row.tags || '—'}</td>
+                        <td className="px-4 py-3">
+                          {row.valid ? (
+                            <span className="inline-flex items-center gap-1 text-green-600 text-xs">
+                              <CheckCircle2 size={12} />
+                              OK
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-red-500 text-xs" title={row.error}>
+                              <AlertCircle size={12} />
+                              {row.error}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-xs text-red-600">{error}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Done Step */}
+        {step === 'done' && results && (
+          <div className="p-8 text-center">
+            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="text-green-500" size={32} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">インポート完了</h3>
+            <p className="text-sm text-gray-500 mb-6">
+              {results.success}件の商品を正常にインポートしました。
+              {results.failed.length > 0 && ` ${results.failed.length}件がスキップされました。`}
+            </p>
+
+            {results.failed.length > 0 && (
+              <div className="max-w-md mx-auto mb-6 text-left">
+                <p className="text-xs font-medium text-gray-700 mb-2">スキップされた行:</p>
+                <div className="bg-red-50 rounded-lg p-3 space-y-1">
+                  {results.failed.map((f, i) => (
+                    <p key={i} className="text-xs text-red-600">
+                      行 {f.index + 1}: {f.name} — {f.error}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={onBack}
+              className="px-6 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium shadow-lg shadow-black/10"
+            >
+              商品一覧に戻る
+            </button>
+          </div>
+        )}
+
+        {/* Footer Actions (preview step only) */}
+        {step === 'preview' && (
+          <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+            <button
+              onClick={() => { setStep('upload'); setParsedRows([]); setError(null); }}
+              className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors text-sm"
+            >
+              ファイルを変更
+            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={onBack}
+                className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={importing || validCount === 0 || !campaignId}
+                className={`px-5 py-2.5 font-medium rounded-lg transition-colors shadow-lg shadow-black/10 flex items-center gap-2 ${
+                  importing || validCount === 0 || !campaignId
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                }`}
+              >
+                {importing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    インポート中...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} />
+                    {validCount}件をインポート
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
