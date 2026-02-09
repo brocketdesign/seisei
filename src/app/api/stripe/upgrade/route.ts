@@ -71,14 +71,24 @@ export async function POST(request: NextRequest) {
         }
 
         // Get current plan from profile
-        const { data: profile } = await supabase
+        let { data: profile } = await supabase
             .from('profiles')
             .select('plan, billing_interval')
             .eq('id', user.id)
             .single();
 
+        // Fallback if billing_interval column doesn't exist yet
+        if (!profile) {
+            const { data: fallback } = await supabase
+                .from('profiles')
+                .select('plan')
+                .eq('id', user.id)
+                .single();
+            profile = fallback as typeof profile;
+        }
+
         const currentPlanId = profile?.plan ?? 'starter';
-        const billingInterval = (profile?.billing_interval ?? 'month') as 'month' | 'year';
+        const billingInterval = ((profile as Record<string, unknown>)?.billing_interval as string ?? 'month') as 'month' | 'year';
         const currentPlan = PLAN_PRICES[currentPlanId];
 
         if (!currentPlan) {
@@ -152,7 +162,7 @@ export async function POST(request: NextRequest) {
                 totalDays: totalDays.toString(),
             },
             locale: 'ja',
-            success_url: `${request.nextUrl.origin}/dashboard/settings?upgrade=success&plan=${targetPlanId}`,
+            success_url: `${request.nextUrl.origin}/dashboard/settings?upgrade=success&plan=${targetPlanId}&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${request.nextUrl.origin}/dashboard/settings?upgrade=cancelled`,
             allow_promotion_codes: true,
         });
@@ -191,14 +201,24 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: '認証が必要です' }, { status: 401 });
         }
 
-        const { data: profile } = await supabase
+        let { data: profile } = await supabase
             .from('profiles')
             .select('plan, billing_interval')
             .eq('id', user.id)
             .single();
 
+        // Fallback if billing_interval column doesn't exist yet
+        if (!profile) {
+            const { data: fallback } = await supabase
+                .from('profiles')
+                .select('plan')
+                .eq('id', user.id)
+                .single();
+            profile = fallback as typeof profile;
+        }
+
         const currentPlanId = profile?.plan ?? 'starter';
-        const billingInterval = (profile?.billing_interval ?? 'month') as 'month' | 'year';
+        const billingInterval = ((profile as Record<string, unknown>)?.billing_interval as string ?? 'month') as 'month' | 'year';
         const currentPlan = PLAN_PRICES[currentPlanId];
         const targetPlan = PLAN_PRICES[targetPlanId];
 

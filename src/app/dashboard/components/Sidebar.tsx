@@ -17,6 +17,7 @@ import {
   Package,
   Menu,
   X,
+  Key,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -28,6 +29,7 @@ const navItems = [
   { href: '/dashboard/products', icon: Package, label: '商品管理' },
   { href: '/dashboard/campaigns', icon: Megaphone, label: 'キャンペーン' },
   { href: '/dashboard/social', icon: Share2, label: 'ソーシャル' },
+  { href: '/dashboard/api-keys', icon: Key, label: 'API連携' },
   { href: '/dashboard/settings', icon: Settings, label: '設定' },
 ];
 

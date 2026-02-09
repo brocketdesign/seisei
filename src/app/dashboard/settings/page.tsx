@@ -264,38 +264,90 @@ function BillingSettings() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
 
-  // Check for upgrade success/cancelled query params
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const upgradeStatus = params.get('upgrade');
-    const upgradedPlan = params.get('plan');
-    if (upgradeStatus === 'success' && upgradedPlan) {
-      showToast(`${PLAN_PRICES[upgradedPlan]?.name ?? upgradedPlan}プランにアップグレードしました！`, 'success');
-      // Clean up URL
-      window.history.replaceState({}, '', '/dashboard/settings');
-    } else if (upgradeStatus === 'cancelled') {
-      showToast('アップグレードがキャンセルされました', 'error');
-      window.history.replaceState({}, '', '/dashboard/settings');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // Single effect: read URL params, verify upgrade with Stripe if needed,
+  // fetch/poll profile, and update state.
   useEffect(() => {
     (async () => {
+      // ── 1. Capture URL params BEFORE any async work ──────────────
+      const params = new URLSearchParams(window.location.search);
+      const upgradeStatus = params.get('upgrade');
+      const expectedPlan = params.get('plan');
+      const sessionId = params.get('session_id');
+      const justUpgraded = upgradeStatus === 'success' && !!expectedPlan;
+
+      // Show toast & optimistic plan immediately
+      if (justUpgraded && expectedPlan && PLAN_PRICES[expectedPlan]) {
+        setPlan(expectedPlan);
+        showToast(`${PLAN_PRICES[expectedPlan].name}プランにアップグレードしました！`, 'success');
+      } else if (upgradeStatus === 'cancelled') {
+        showToast('アップグレードがキャンセルされました', 'error');
+      }
+
+      // Clean up URL params right away so they don't persist on refresh
+      if (upgradeStatus) {
+        window.history.replaceState({}, '', '/dashboard/settings');
+      }
+
+      // ── 2. If we just came back from Stripe checkout, verify the
+      //       session server-side so the plan is updated in the DB even
+      //       when the Stripe webhook hasn't fired yet (common in local dev).
+      if (justUpgraded && sessionId) {
+        try {
+          await fetch(`/api/stripe/session?session_id=${sessionId}&type=upgrade`);
+        } catch (e) {
+          console.error('[settings] Failed to verify upgrade session:', e);
+        }
+      }
+
+      // ── 3. Fetch profile from DB ────────────────────────────────
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { setLoading(false); return; }
 
-      // Fetch plan
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('plan, billing_interval')
-        .eq('id', user.id)
-        .single();
-      const currentPlan = profile?.plan ?? 'starter';
-      setPlan(currentPlan);
-      setBillingInterval((profile?.billing_interval ?? 'month') as 'month' | 'year');
+      const fetchProfile = async () => {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('plan, billing_interval')
+          .eq('id', user.id)
+          .single();
+        // Fallback if billing_interval column doesn't exist yet
+        if (error && !profile) {
+          const { data: fallback } = await supabase
+            .from('profiles')
+            .select('plan')
+            .eq('id', user.id)
+            .single();
+          return fallback;
+        }
+        return profile;
+      };
 
-      // Fetch usage this billing period
+      let profile = await fetchProfile();
+      let dbPlan = profile?.plan ?? 'starter';
+      let dbInterval = ((profile as Record<string, unknown>)?.billing_interval as string ?? 'month') as 'month' | 'year';
+
+      // ── 4. If the DB still hasn't caught up, poll a few times
+      if (justUpgraded && expectedPlan && dbPlan !== expectedPlan) {
+        const maxAttempts = 5;
+        for (let i = 0; i < maxAttempts; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          const freshProfile = await fetchProfile();
+          if (freshProfile?.plan === expectedPlan) {
+            dbPlan = freshProfile.plan;
+            dbInterval = ((freshProfile as Record<string, unknown>)?.billing_interval as string ?? 'month') as 'month' | 'year';
+            break;
+          }
+        }
+      }
+
+      // Only update state from DB if we did NOT just upgrade optimistically,
+      // or if the DB has caught up to the expected plan.
+      if (!justUpgraded || dbPlan === expectedPlan) {
+        setPlan(dbPlan);
+      }
+      // If the DB never caught up, keep the optimistic value already set above.
+      setBillingInterval(dbInterval);
+
+      // ── 5. Fetch usage this billing period ──────────────────────
       const periodStart = new Date(
         Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)
       ).toISOString();
@@ -316,6 +368,7 @@ function BillingSettings() {
       setUsage({ images: imageCount ?? 0, videos: videoCount ?? 0 });
       setLoading(false);
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
   // Fetch proration preview when a plan is selected

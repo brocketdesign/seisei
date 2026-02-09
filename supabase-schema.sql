@@ -269,6 +269,33 @@ CREATE INDEX IF NOT EXISTS idx_video_generations_ai_model_id ON public.video_gen
 CREATE INDEX IF NOT EXISTS idx_video_generations_generation_id ON public.video_generations(generation_id);
 CREATE INDEX IF NOT EXISTS idx_video_generations_campaign_id ON public.video_generations(campaign_id);
 
+-- API Keys table (for external API access by AI agents)
+CREATE TABLE IF NOT EXISTS public.api_keys (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  key_hash TEXT NOT NULL UNIQUE,
+  key_prefix TEXT NOT NULL,
+  last_used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS for api_keys
+ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
+
+-- API Keys policies (users can only view and delete their own keys)
+DROP POLICY IF EXISTS "Users can view own api keys" ON public.api_keys;
+CREATE POLICY "Users can view own api keys" ON public.api_keys
+  FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own api keys" ON public.api_keys;
+CREATE POLICY "Users can delete own api keys" ON public.api_keys
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Index for fast key lookup by hash
+CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON public.api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON public.api_keys(user_id);
+
 -- Storage bucket for generation images and videos
 -- Run this in the Supabase SQL editor or via the dashboard:
 -- INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

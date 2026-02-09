@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { getStripe } from '@/utils/stripe';
 import { createClient } from '@supabase/supabase-js';
 import { sendWelcomeEmail } from '@/utils/resend';
@@ -12,9 +13,15 @@ const supabaseAdmin = createClient(
 
 export async function GET(request: NextRequest) {
     const sessionId = request.nextUrl.searchParams.get('session_id');
+    const type = request.nextUrl.searchParams.get('type');
 
     if (!sessionId) {
         return NextResponse.json({ error: 'Missing session_id' }, { status: 400 });
+    }
+
+    // ── Plan-upgrade verification (fallback when webhook hasn't fired) ──
+    if (type === 'upgrade') {
+        return handleUpgradeVerification(sessionId);
     }
 
     try {
@@ -78,10 +85,77 @@ export async function GET(request: NextRequest) {
 }
 
 /**
+ * Verify a plan-upgrade checkout session and apply the upgrade to the
+ * user's profile.  This acts as a fallback for environments where the
+ * Stripe webhook hasn't fired (e.g. local dev without `stripe listen`).
+ */
+async function handleUpgradeVerification(sessionId: string) {
+    try {
+        const session = await getStripe().checkout.sessions.retrieve(sessionId);
+
+        if (session.payment_status !== 'paid') {
+            return NextResponse.json({ status: 'pending', message: 'Payment not confirmed yet' });
+        }
+
+        const metadata = session.metadata || {};
+        if (metadata.type !== 'plan_upgrade') {
+            return NextResponse.json({ error: 'Session is not a plan upgrade' }, { status: 400 });
+        }
+
+        const userId = metadata.userId;
+        const targetPlanId = metadata.targetPlanId;
+        const billingInterval = metadata.billingInterval || 'month';
+
+        if (!userId || !targetPlanId) {
+            return NextResponse.json({ error: 'Missing upgrade metadata' }, { status: 400 });
+        }
+
+        // Check current plan — skip if already upgraded (webhook was faster)
+        const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('plan')
+            .eq('id', userId)
+            .single();
+
+        if (profile?.plan === targetPlanId) {
+            console.log('[session] Plan already upgraded (webhook was faster):', userId, '→', targetPlanId);
+            return NextResponse.json({ status: 'upgraded', plan: targetPlanId });
+        }
+
+        // Apply the upgrade
+        let { error } = await supabaseAdmin.from('profiles').update({
+            plan: targetPlanId,
+            billing_interval: billingInterval,
+            updated_at: new Date().toISOString(),
+        }).eq('id', userId);
+
+        // Fallback: if billing_interval column doesn't exist yet, retry without it
+        if (error?.code === 'PGRST204' || error?.message?.includes('billing_interval')) {
+            console.warn('[session] billing_interval column missing, retrying without it');
+            ({ error } = await supabaseAdmin.from('profiles').update({
+                plan: targetPlanId,
+                updated_at: new Date().toISOString(),
+            }).eq('id', userId));
+        }
+
+        if (error) {
+            console.error('[session] Error applying upgrade:', error);
+            return NextResponse.json({ error: 'Failed to apply upgrade' }, { status: 500 });
+        }
+
+        console.log('[session] Plan upgrade applied (fallback):', userId, '→', targetPlanId);
+        return NextResponse.json({ status: 'upgraded', plan: targetPlanId });
+    } catch (error) {
+        console.error('[session] Upgrade verification error:', error);
+        return NextResponse.json({ error: 'Failed to verify upgrade session' }, { status: 500 });
+    }
+}
+
+/**
  * Fallback: create user directly when webhook hasn't fired (e.g. webhook
  * delivery failed, port mismatch in local dev, or Stripe delay).
  */
-async function createUserFallback(session: import('stripe').Checkout.Session) {
+async function createUserFallback(session: Stripe.Checkout.Session) {
     const email = session.customer_details?.email;
     const metadata = session.metadata || {};
 

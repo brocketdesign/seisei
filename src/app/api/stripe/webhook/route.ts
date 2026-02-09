@@ -69,11 +69,20 @@ async function handlePlanUpgrade(session: Stripe.Checkout.Session) {
     console.log('[webhook] Processing plan upgrade for user:', userId, '→', targetPlanId);
 
     // Update the user's plan in their profile
-    const { error } = await supabaseAdmin.from('profiles').update({
+    let { error } = await supabaseAdmin.from('profiles').update({
         plan: targetPlanId,
         billing_interval: billingInterval,
         updated_at: new Date().toISOString(),
     }).eq('id', userId);
+
+    // Fallback: if billing_interval column doesn't exist yet, retry without it
+    if (error?.code === 'PGRST204' || error?.message?.includes('billing_interval')) {
+        console.warn('[webhook] billing_interval column missing, retrying without it');
+        ({ error } = await supabaseAdmin.from('profiles').update({
+            plan: targetPlanId,
+            updated_at: new Date().toISOString(),
+        }).eq('id', userId));
+    }
 
     if (error) {
         console.error('[webhook] Error upgrading plan:', error);
