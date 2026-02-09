@@ -29,8 +29,13 @@ export async function POST(request: NextRequest) {
 
     // Verify the key owner still has API access
     if (!hasApiAccess(result.plan)) {
+        console.error('[api/v1/email/send] API access denied — user:', result.userId, 'plan:', result.plan);
         return NextResponse.json(
-            { error: 'API access requires a Business or Enterprise plan' },
+            {
+                error: 'API access requires a Business or Enterprise plan',
+                currentPlan: result.plan,
+                hint: 'If you recently upgraded, please wait a moment and try again, or contact support.',
+            },
             { status: 403 },
         );
     }

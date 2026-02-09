@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { getAdminClient } from '@/utils/storage';
-import { generateApiKey, hasApiAccess } from '@/utils/api-keys';
+import { generateApiKey, hasApiAccess, syncPlanFromStripe } from '@/utils/api-keys';
 
 /**
  * GET /api/api-keys — List the current user's API keys.
@@ -48,10 +48,25 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
         .single();
 
-    const plan = profile?.plan ?? 'starter';
+    let plan = profile?.plan ?? 'starter';
+
+    // If the cached plan doesn't have API access, try re-syncing from Stripe.
+    // This self-heals when the webhook didn't fire after a plan upgrade.
+    if (!hasApiAccess(plan)) {
+        console.log('[api/api-keys] Plan', plan, 'lacks API access for user', user.id, '— attempting Stripe sync');
+        const syncedPlan = await syncPlanFromStripe(user.id);
+        if (syncedPlan) {
+            plan = syncedPlan;
+        }
+    }
+
     if (!hasApiAccess(plan)) {
         return NextResponse.json(
-            { error: 'API access requires a Business or Enterprise plan' },
+            {
+                error: 'API access requires a Business or Enterprise plan',
+                currentPlan: plan,
+                hint: 'If you recently upgraded, please refresh your dashboard or contact support.',
+            },
             { status: 403 },
         );
     }
