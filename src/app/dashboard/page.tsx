@@ -52,6 +52,38 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
 
+      // Recover onboarding data from localStorage if profile is missing brand_name
+      try {
+        const stored = localStorage.getItem('seisei_onboarding');
+        if (stored) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('brand_name')
+            .eq('id', user.id)
+            .single();
+          if (!profile?.brand_name) {
+            const onboardingData = JSON.parse(stored);
+            if (onboardingData.brand?.name) {
+              await supabase.from('profiles').update({
+                brand_name: onboardingData.brand.name || null,
+                website: onboardingData.brand.website || null,
+                description: onboardingData.brand.description || null,
+                categories: onboardingData.product?.categories || [],
+                target_audience: onboardingData.product?.targetAudience || [],
+                price_range: onboardingData.product?.priceRange || null,
+                monthly_volume: onboardingData.product?.monthlyVolume || null,
+                styles: onboardingData.styles || [],
+                platforms: onboardingData.platforms || [],
+                updated_at: new Date().toISOString(),
+              }).eq('id', user.id);
+            }
+          }
+          localStorage.removeItem('seisei_onboarding');
+        }
+      } catch (e) {
+        console.error('Failed to recover onboarding data:', e);
+      }
+
       // Fetch all stats in parallel
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
       const [generationsRes, videoRes, modelsRes, campaignsRes, latestRes] = await Promise.all([

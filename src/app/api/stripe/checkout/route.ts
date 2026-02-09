@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
                 styles: JSON.stringify(onboardingData.styles || []),
                 platforms: JSON.stringify(onboardingData.platforms || []),
             },
+            locale: 'ja',
             success_url: `${request.nextUrl.origin}/onboarding/success?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${request.nextUrl.origin}/onboarding?step=plan`,
             allow_promotion_codes: true,

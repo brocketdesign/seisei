@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { createSegmindClient } from '@/utils/segmind';
 import { buildModelPrompt, type AIModel } from '@/types/models';
-import { uploadImageToStorage } from '@/utils/storage';
+import { uploadImageToStorage, getAdminClient } from '@/utils/storage';
 import { canGenerateImage } from '@/utils/plan-limits';
 
 export const maxDuration = 120; // Allow up to 2 minutes for generation
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Run the pipeline in the background while streaming events
     (async () => {
         try {
-            // Check authentication
+            // Check authentication using cookie-based client
             const supabase = await createClient();
             const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -37,15 +37,19 @@ export async function POST(request: NextRequest) {
                 return;
             }
 
+            // Use admin client for all DB operations to avoid RLS issues
+            // in the streaming SSE context (cookie-based auth can become
+            // stale during the long-running generation pipeline).
+            const adminClient = getAdminClient();
+
             // Check image generation quota
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: profile } = await (supabase as any)
+            const { data: profile } = await adminClient
                 .from('profiles')
                 .select('plan')
                 .eq('id', user.id)
                 .single();
             const userPlan = profile?.plan || 'starter';
-            const allowed = await canGenerateImage(supabase, user.id, userPlan);
+            const allowed = await canGenerateImage(adminClient, user.id, userPlan);
             if (!allowed) {
                 await sendEvent('error', { error: '今月の画像生成上限に達しました。プランをアップグレードしてください。' });
                 await writer.close();
@@ -263,10 +267,14 @@ export async function POST(request: NextRequest) {
                     }
                     {
                         await sendEvent('step', { step: 1, total: 2, message: '画像をアップロード中...' });
-                        const [faceSourceUrl, faceTargetUrl] = await Promise.all([
-                            uploadImageToStorage(sourceImage, 'faceswap-source'),
-                            uploadImageToStorage(targetImage, 'faceswap-target'),
-                        ]);
+                        // If an image is already a URL (not base64 data URI), use it directly
+                        const faceSourceUrl = sourceImage.startsWith('data:')
+                            ? await uploadImageToStorage(sourceImage, 'faceswap-source')
+                            : sourceImage;
+                        const faceTargetUrl = targetImage.startsWith('data:')
+                            ? await uploadImageToStorage(targetImage, 'faceswap-target')
+                            : targetImage;
+
                         await sendEvent('step', { step: 2, total: 2, message: 'フェイススワップ処理中...' });
                         result = await segmind.faceSwap({
                             source_image: faceSourceUrl,
@@ -293,9 +301,11 @@ export async function POST(request: NextRequest) {
                 console.error('Failed to upload generated image to storage:', uploadErr);
             }
 
-            // Save generation to database
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: generation, error: dbError } = await (supabase as any)
+            // Save generation to database using admin client to bypass RLS.
+            // The user's identity was already verified via auth.getUser() above.
+            // Using the cookie-based client here would fail because the SSE
+            // streaming context can outlive the original request cookies.
+            const { data: generation, error: dbError } = await adminClient
                 .from('generations')
                 .insert({
                     user_id: user.id,

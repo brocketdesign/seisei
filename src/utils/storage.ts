@@ -4,9 +4,10 @@ const BUCKET_NAME = 'generation-images';
 
 /**
  * Create a Supabase admin client using the service role key.
- * This bypasses RLS and is only used server-side for storage uploads.
+ * This bypasses RLS and is only used server-side for storage uploads
+ * and database inserts in background async contexts (e.g. SSE streaming).
  */
-function getAdminClient() {
+export function getAdminClient() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !serviceKey) {

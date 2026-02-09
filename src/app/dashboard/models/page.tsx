@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { 
   Users, 
   Plus, 
@@ -16,10 +17,11 @@ import {
   X,
   Check,
   ChevronRight,
-  User
+  User,
+  Loader2,
 } from 'lucide-react';
 
-import { AIModel } from '@/types/models';
+import { AIModel, buildModelPrompt } from '@/types/models';
 import { createClient } from '@/utils/supabase/client';
 
 type Model = AIModel;
@@ -113,6 +115,13 @@ export default function ModelsPage() {
     setNewModel({ name: '', bodyType: 'Slim', isLocked: false, tags: [], sex: 'female' });
   };
 
+  // Handle new model saved
+  const handleModelSaved = (savedModel: Model) => {
+    setModels(prev => [...prev, savedModel]);
+    setView('roster');
+    setNewModel({ name: '', bodyType: 'Slim', isLocked: false, tags: [], sex: 'female' });
+  };
+
   return (
     <>
       {/* Header */}
@@ -151,6 +160,7 @@ export default function ModelsPage() {
             setMode={setAddMode} 
             newModel={newModel}
             setNewModel={setNewModel}
+            onModelSaved={handleModelSaved}
           />
         )}
       </div>
@@ -281,14 +291,224 @@ function AddModelView({
   mode, 
   setMode,
   newModel,
-  setNewModel
+  setNewModel,
+  onModelSaved
 }: { 
   onBack: () => void, 
   mode: 'upload' | 'generate', 
   setMode: (m: 'upload' | 'generate') => void,
   newModel: any,
-  setNewModel: (m: any) => void
+  setNewModel: (m: any) => void,
+  onModelSaved: (m: Model) => void
 }) {
+  const supabase = createClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Upload mode state
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+
+  // Generate mode state
+  const [genSex, setGenSex] = useState<'female' | 'male'>('female');
+  const [genAge, setGenAge] = useState(24);
+  const [genEthnicity, setGenEthnicity] = useState('Japanese');
+  const [genVibe, setGenVibe] = useState('');
+  const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  // Common state
+  const [modelName, setModelName] = useState(newModel.name || '');
+  const [bodyType, setBodyType] = useState<'Slim' | 'Athletic' | 'Curvy'>(newModel.bodyType || 'Slim');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Handle file upload
+  const handleFileSelect = (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setSaveError('ファイルサイズは10MB以下にしてください。');
+      return;
+    }
+    setUploadedFile(file);
+    setUploadPreview(URL.createObjectURL(file));
+  };
+
+  // Generate AI face preview
+  const handleGeneratePreview = async () => {
+    setIsGenerating(true);
+    setGenerateError(null);
+    setGeneratedPreview(null);
+
+    try {
+      // Build a temporary model to use buildModelPrompt
+      const tempModel: AIModel = {
+        id: 'temp',
+        name: modelName || 'Model',
+        avatar: '',
+        tags: genVibe ? genVibe.split(/[,、\s]+/).filter(Boolean).slice(0, 3) : [],
+        isActive: true,
+        bodyType,
+        isLocked: false,
+        age: genAge,
+        ethnicity: genEthnicity,
+        sex: genSex,
+      };
+
+      const stylePrompt = buildModelPrompt(tempModel);
+      const prompt = `Close-up professional headshot portrait photograph of ${stylePrompt}. Face clearly visible, looking at camera, natural expression, soft studio lighting, clean background, 8k resolution, photorealistic, sharp focus on face.${genVibe ? ` Style: ${genVibe}.` : ''}`;
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'generate',
+          prompt,
+          aspectRatio: '1:1',
+        }),
+      });
+
+      if (!response.ok && !response.body) {
+        throw new Error('サーバーエラーが発生しました。');
+      }
+
+      // Read SSE stream
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lastNewline = buffer.lastIndexOf('\n');
+        if (lastNewline === -1) continue;
+
+        const complete = buffer.substring(0, lastNewline);
+        buffer = buffer.substring(lastNewline + 1);
+        const lines = complete.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            let data: Record<string, unknown>;
+            try {
+              data = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
+
+            if (currentEvent === 'complete') {
+              setGeneratedPreview(data.image as string);
+            } else if (currentEvent === 'error') {
+              throw new Error((data.error as string) || '生成に失敗しました。');
+            }
+            currentEvent = '';
+          }
+        }
+      }
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : '生成に失敗しました。');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Save model via API route (server-side storage + DB to bypass RLS)
+  const handleSave = async () => {
+    if (!modelName.trim()) {
+      setSaveError('モデル名を入力してください。');
+      return;
+    }
+
+    const hasImage = mode === 'upload' ? !!uploadedFile : !!generatedPreview;
+    if (!hasImage) {
+      setSaveError(mode === 'upload' ? '顔写真をアップロードしてください。' : 'まずプレビューを生成してください。');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      // Build the base64 data URI for the thumbnail
+      let thumbnailData: string;
+
+      if (mode === 'upload' && uploadedFile) {
+        thumbnailData = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(uploadedFile);
+        });
+      } else if (mode === 'generate' && generatedPreview) {
+        thumbnailData = generatedPreview;
+      } else {
+        throw new Error('画像が見つかりません。');
+      }
+
+      // Derive tags from vibe text in generate mode
+      const tags = mode === 'generate' && genVibe
+        ? genVibe.split(/[,、\s]+/).filter(Boolean).slice(0, 5)
+        : [];
+
+      const modelDataPayload = {
+        isActive: true,
+        isLocked: false,
+        bodyType,
+        tags,
+        age: mode === 'generate' ? genAge : undefined,
+        ethnicity: mode === 'generate' ? genEthnicity : undefined,
+        sex: mode === 'generate' ? genSex : (newModel.sex || 'female'),
+      };
+
+      const response = await fetch('/api/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: modelName.trim(),
+          type: mode === 'generate' ? 'ai-generated' : 'uploaded',
+          thumbnailData,
+          modelData: modelDataPayload,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || '保存に失敗しました。');
+      }
+
+      // Map to AIModel type
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = result.model as any;
+      const savedModel: Model = {
+        id: d.id,
+        name: d.name,
+        avatar: d.thumbnail_url || '',
+        tags: d.model_data?.tags || [],
+        isActive: d.model_data?.isActive ?? true,
+        bodyType: d.model_data?.bodyType || 'Slim',
+        isLocked: d.model_data?.isLocked ?? false,
+        age: d.model_data?.age,
+        ethnicity: d.model_data?.ethnicity,
+        sex: d.model_data?.sex || 'female',
+      };
+
+      onModelSaved(savedModel);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : '保存に失敗しました。');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const previewImage = mode === 'upload' ? uploadPreview : generatedPreview;
+  const canSave = modelName.trim() && (mode === 'upload' ? !!uploadedFile : !!generatedPreview);
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex items-center gap-2 mb-6 text-sm text-gray-500">
@@ -320,64 +540,298 @@ function AddModelView({
         </div>
 
         <div className="p-8">
+          {/* Model Name — shared between modes */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">モデル名 <span className="text-red-400">*</span></label>
+            <input
+              type="text"
+              value={modelName}
+              onChange={(e) => setModelName(e.target.value)}
+              placeholder="例: Yuki"
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+            />
+          </div>
+
           {mode === 'upload' ? (
-            <div className="border-2 border-dashed border-gray-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors cursor-pointer group">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-white group-hover:shadow-md transition-all">
-                <Upload className="text-gray-400 group-hover:text-black" size={24} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Upload Area */}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleFileSelect(f);
+                  }}
+                />
+                {uploadPreview ? (
+                  <div className="relative group">
+                    <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                      <Image
+                        src={uploadPreview}
+                        alt="アップロード画像"
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        setUploadedFile(null);
+                        if (uploadPreview) URL.revokeObjectURL(uploadPreview);
+                        setUploadPreview(null);
+                      }}
+                      className="absolute top-2 right-2 w-7 h-7 bg-black/70 hover:bg-black text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-2 text-xs text-gray-400 hover:text-black underline"
+                    >
+                      別の画像を選択
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const f = e.dataTransfer.files[0];
+                      if (f) handleFileSelect(f);
+                    }}
+                    onDragOver={(e) => e.preventDefault()}
+                    className="border-2 border-dashed border-gray-200 rounded-2xl p-12 flex flex-col items-center justify-center text-center hover:bg-gray-50 hover:border-black transition-colors cursor-pointer group"
+                  >
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-white group-hover:shadow-md transition-all">
+                      <Upload className="text-gray-400 group-hover:text-black" size={24} />
+                    </div>
+                    <h3 className="font-bold text-gray-900 mb-1">写真をドラッグ＆ドロップ</h3>
+                    <p className="text-sm text-gray-500 mb-6">または クリックしてファイルを選択</p>
+                    <p className="text-xs text-gray-400">推奨サイズ: 1024x1024px (JPG, PNG)</p>
+                  </div>
+                )}
               </div>
-              <h3 className="font-bold text-gray-900 mb-1">写真をドラッグ＆ドロップ</h3>
-              <p className="text-sm text-gray-500 mb-6">または クリックしてファイルを選択</p>
-              <p className="text-xs text-gray-400">推奨サイズ: 1024x1024px (JPG, PNG)</p>
+
+              {/* Upload Mode Settings */}
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">性別</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['female', 'male'] as const).map(sex => (
+                      <button
+                        key={sex}
+                        onClick={() => setNewModel({ ...newModel, sex })}
+                        className={`py-2.5 rounded-lg text-sm border transition-all ${
+                          (newModel.sex || 'female') === sex
+                            ? 'border-black bg-black text-white'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {sex === 'female' ? '女性' : '男性'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">体型</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['Slim', 'Athletic', 'Curvy'] as const).map(type => (
+                      <button
+                        key={type}
+                        onClick={() => setBodyType(type)}
+                        className={`py-2.5 rounded-lg text-sm border transition-all ${
+                          bodyType === type
+                            ? 'border-black bg-black text-white'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">性別 (Sex)</label>
-                  <select className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none">
-                    <option value="female">女性 (Female)</option>
-                    <option value="male">男性 (Male)</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">性別</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['female', 'male'] as const).map(sex => (
+                      <button
+                        key={sex}
+                        onClick={() => setGenSex(sex)}
+                        className={`py-2.5 rounded-lg text-sm border transition-all ${
+                          genSex === sex
+                            ? 'border-black bg-black text-white'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {sex === 'female' ? '女性' : '男性'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">年齢</label>
-                  <input type="number" defaultValue={24} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none" />
+                  <input
+                    type="number"
+                    value={genAge}
+                    onChange={(e) => setGenAge(parseInt(e.target.value) || 24)}
+                    min={18}
+                    max={60}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">人種</label>
-                  <select className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none">
-                    <option>日本人 (Japanese)</option>
-                    <option>アジア系 (Asian)</option>
-                    <option>白人 (Caucasian)</option>
-                    <option>ミックス (Mixed)</option>
+                  <select
+                    value={genEthnicity}
+                    onChange={(e) => setGenEthnicity(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                  >
+                    <option value="Japanese">日本人 (Japanese)</option>
+                    <option value="Asian">アジア系 (Asian)</option>
+                    <option value="Caucasian">白人 (Caucasian)</option>
+                    <option value="Mixed">ミックス (Mixed)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">雰囲気・特徴 (Vibe)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">体型</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['Slim', 'Athletic', 'Curvy'] as const).map(type => (
+                      <button
+                        key={type}
+                        onClick={() => setBodyType(type)}
+                        className={`py-2.5 rounded-lg text-sm border transition-all ${
+                          bodyType === type
+                            ? 'border-black bg-black text-white'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">雰囲気・特徴 (タグ)</label>
                   <textarea 
+                    value={genVibe}
+                    onChange={(e) => setGenVibe(e.target.value)}
                     placeholder="例: 透明感のある、ナチュラルメイク、黒髪ロング..." 
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none h-24 resize-none"
-                  ></textarea>
+                  />
                 </div>
-                <button className="w-full py-3 bg-black text-white rounded-lg font-medium shadow-lg shadow-black/10 hover:bg-gray-800 transition-all flex items-center justify-center gap-2">
-                  <Sparkles size={18} />
-                  プレビューを生成
+                <button
+                  onClick={handleGeneratePreview}
+                  disabled={isGenerating}
+                  className={`w-full py-3 rounded-lg font-medium shadow-lg shadow-black/10 transition-all flex items-center justify-center gap-2 ${
+                    isGenerating
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-black text-white hover:bg-gray-800'
+                  }`}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} />
+                      プレビューを生成
+                    </>
+                  )}
                 </button>
+                {generateError && (
+                  <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+                    <p className="text-xs text-red-600">{generateError}</p>
+                  </div>
+                )}
               </div>
-              <div className="bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400 min-h-[300px]">
-                <div className="text-center">
-                  <div className="mx-auto w-12 h-12 mb-2 bg-gray-200 rounded-full animate-pulse"></div>
-                  <p>プレビューがここに表示されます</p>
-                </div>
+
+              {/* Preview Area */}
+              <div className={`bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-center min-h-[300px] overflow-hidden relative ${
+                generatedPreview ? '' : ''
+              }`}>
+                {isGenerating ? (
+                  <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-gray-400 animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">AIモデルを生成中...</p>
+                    <p className="text-xs text-gray-400 mt-1">30秒〜1分ほどかかります</p>
+                  </div>
+                ) : generatedPreview ? (
+                  <div className="relative w-full h-full min-h-[300px]">
+                    <Image
+                      src={generatedPreview}
+                      alt="生成されたモデル"
+                      fill
+                      className="object-cover rounded-xl"
+                      unoptimized
+                    />
+                    <button
+                      onClick={handleGeneratePreview}
+                      className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/70 hover:bg-black text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors"
+                    >
+                      <Sparkles size={12} />
+                      再生成
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-400">
+                    <div className="mx-auto w-16 h-16 mb-3 bg-gray-200 rounded-full flex items-center justify-center">
+                      <User size={32} className="text-gray-300" />
+                    </div>
+                    <p className="text-sm">プレビューがここに表示されます</p>
+                    <p className="text-xs text-gray-400 mt-1">左の設定を入力して「プレビューを生成」を押してください</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
         
+        {/* Error */}
+        {saveError && (
+          <div className="mx-8 mb-4 p-3 bg-red-50 border border-red-100 rounded-lg">
+            <p className="text-xs text-red-600">{saveError}</p>
+          </div>
+        )}
+
         {/* Footer Actions */}
         <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
-            <button onClick={onBack} className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors">キャンセル</button>
-            <button className="px-5 py-2.5 bg-black text-white font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-lg shadow-black/10">登録する</button>
+          <button
+            onClick={onBack}
+            className="px-5 py-2.5 text-gray-600 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!canSave || isSaving}
+            className={`px-5 py-2.5 font-medium rounded-lg transition-colors shadow-lg shadow-black/10 flex items-center gap-2 ${
+              !canSave || isSaving
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-black text-white hover:bg-gray-800'
+            }`}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                保存中...
+              </>
+            ) : (
+              <>
+                <Check size={16} />
+                登録する
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

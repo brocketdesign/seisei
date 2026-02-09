@@ -51,6 +51,33 @@ function OnboardingSuccessContent() {
 
                         setStatus('success');
 
+                        // Recover onboarding data from localStorage and ensure
+                        // the profile is up-to-date (belt-and-suspenders)
+                        try {
+                            const stored = localStorage.getItem('seisei_onboarding');
+                            if (stored) {
+                                const onboardingData = JSON.parse(stored);
+                                const { data: { user: currentUser } } = await supabase.auth.getUser();
+                                if (currentUser) {
+                                    await supabase.from('profiles').update({
+                                        brand_name: onboardingData.brand?.name || null,
+                                        website: onboardingData.brand?.website || null,
+                                        description: onboardingData.brand?.description || null,
+                                        categories: onboardingData.product?.categories || [],
+                                        target_audience: onboardingData.product?.targetAudience || [],
+                                        price_range: onboardingData.product?.priceRange || null,
+                                        monthly_volume: onboardingData.product?.monthlyVolume || null,
+                                        styles: onboardingData.styles || [],
+                                        platforms: onboardingData.platforms || [],
+                                        updated_at: new Date().toISOString(),
+                                    }).eq('id', currentUser.id);
+                                }
+                                localStorage.removeItem('seisei_onboarding');
+                            }
+                        } catch (lsErr) {
+                            console.error('Failed to recover onboarding data:', lsErr);
+                        }
+
                         // Redirect to dashboard after brief success animation
                         setTimeout(() => {
                             router.push('/dashboard');

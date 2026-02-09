@@ -4,6 +4,7 @@ import React, { useState, useCallback, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createClient } from '@/utils/supabase/client';
 import {
   Check,
   ArrowRight,
@@ -308,6 +309,26 @@ function OnboardingContent() {
 
       // Persist to localStorage in case user navigates back
       localStorage.setItem('seisei_onboarding', JSON.stringify(onboardingData));
+
+      // If user is already authenticated, save onboarding data to their
+      // profile immediately so it persists even if the Stripe webhook
+      // or fallback fails to update the profile later.
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('profiles').update({
+          brand_name: brand.name || null,
+          website: brand.website || null,
+          description: brand.description || null,
+          categories: product.categories,
+          target_audience: product.targetAudience,
+          price_range: product.priceRange || null,
+          monthly_volume: product.monthlyVolume || null,
+          styles: selectedStyles,
+          platforms: selectedPlatforms,
+          updated_at: new Date().toISOString(),
+        }).eq('id', user.id);
+      }
 
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
