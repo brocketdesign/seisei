@@ -442,8 +442,6 @@ function AddProductView({
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const supabase = createClient();
-
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
       setError('画像ファイルのみアップロードできます。');
@@ -493,47 +491,34 @@ function AddProductView({
     setError(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('ログインが必要です。');
-
-      // Upload image to Supabase Storage
-      const ext = uploadedFile.name.split('.').pop() || 'jpg';
-      const fileName = `products/${user.id}/${crypto.randomUUID()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('generation-images')
-        .upload(fileName, uploadedFile, {
-          contentType: uploadedFile.type,
-          upsert: false,
+      // Convert file to base64 data URI
+      const toDataUri = (file: File): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
         });
 
-      if (uploadError) throw new Error(`アップロード失敗: ${uploadError.message}`);
+      const imageData = await toDataUri(uploadedFile);
 
-      const { data: urlData } = supabase.storage
-        .from('generation-images')
-        .getPublicUrl(fileName);
-
-      const imageUrl = urlData.publicUrl;
-
-      // Insert product record
-      const { data: product, error: insertError } = await supabase
-        .from('products')
-        .insert({
-          user_id: user.id,
-          campaign_id: campaignId,
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: name.trim(),
+          campaignId,
+          imageData,
           description: description.trim() || null,
-          image_url: imageUrl,
           category: category.trim() || null,
           tags: tags.trim() ? tags.split(',').map(t => t.trim()).filter(Boolean) : null,
-          is_active: true,
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (insertError) throw new Error(`登録失敗: ${insertError.message}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '登録失敗');
 
-      onProductAdded(product);
+      onProductAdded(json.product);
     } catch (err) {
       setError(err instanceof Error ? err.message : '商品の登録に失敗しました。');
     } finally {

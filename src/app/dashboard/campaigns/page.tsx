@@ -83,21 +83,25 @@ export default function CampaignsPage() {
   const handleCreateCampaign = async () => {
     if (!newCampaignName.trim()) return;
     setCreating(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setCreating(false); return; }
 
-    const { data, error } = await supabase
-      .from('campaigns')
-      .insert({ user_id: user.id, name: newCampaignName.trim(), status: 'draft' })
-      .select()
-      .single();
+    try {
+      const res = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCampaignName.trim() }),
+      });
 
-    if (data && !error) {
-      setCampaigns(prev => [data, ...prev]);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+
+      setCampaigns(prev => [json.campaign, ...prev]);
       setNewCampaignName('');
       setShowCreateForm(false);
+    } catch (err) {
+      console.error('Campaign creation failed:', err);
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   // Close menus on click outside
@@ -114,22 +118,23 @@ export default function CampaignsPage() {
 
   const handleDuplicate = async (campaign: Campaign) => {
     setOpenMenuId(null);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
-    const { data, error } = await supabase
-      .from('campaigns')
-      .insert({
-        user_id: user.id,
-        name: `${campaign.name} (コピー)`,
-        status: 'draft' as const,
-        description: campaign.description,
-      })
-      .select()
-      .single();
+    try {
+      const res = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${campaign.name} (コピー)`,
+          description: campaign.description,
+        }),
+      });
 
-    if (data && !error) {
-      setCampaigns(prev => [data, ...prev]);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+
+      setCampaigns(prev => [json.campaign, ...prev]);
+    } catch (err) {
+      console.error('Campaign duplication failed:', err);
     }
   };
 
