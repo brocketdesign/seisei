@@ -60,17 +60,54 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/v1/campaigns
  *
- * Create a new campaign — coming soon.
+ * Create a new campaign.
+ *
+ * Body:
+ *  - name        (string, required): Campaign name
+ *  - description (string, optional): Campaign description
+ *  - status      (string, optional): 'draft' | 'active' | 'scheduled' | 'completed' (default: 'active')
  */
 export async function POST(request: NextRequest) {
     const auth = await authenticateApiRequest(request);
     if ('error' in auth) return auth.error;
 
-    return NextResponse.json(
-        {
-            error: 'Campaign creation via API is coming soon.',
-            status: 'coming_soon',
-        },
-        { status: 501 },
-    );
+    const { userId } = auth.user;
+
+    try {
+        const body = await request.json();
+        const { name, description, status } = body;
+
+        if (!name || !name.trim()) {
+            return NextResponse.json({ error: 'name is required.' }, { status: 400 });
+        }
+
+        const validStatuses = ['draft', 'active', 'scheduled', 'completed'];
+        const resolvedStatus = validStatuses.includes(status) ? status : 'active';
+
+        const adminClient = getAdminClient();
+
+        const { data: campaign, error: dbError } = await adminClient
+            .from('campaigns')
+            .insert({
+                user_id: userId,
+                name: name.trim(),
+                description: description || null,
+                status: resolvedStatus,
+            })
+            .select('id, name, description, status, created_at')
+            .single();
+
+        if (dbError) {
+            console.error('[api/v1/campaigns] DB error:', dbError);
+            return NextResponse.json({ error: dbError.message }, { status: 500 });
+        }
+
+        return NextResponse.json({ campaign });
+    } catch (error) {
+        console.error('[api/v1/campaigns] Error:', error);
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : 'Campaign creation failed' },
+            { status: 500 },
+        );
+    }
 }

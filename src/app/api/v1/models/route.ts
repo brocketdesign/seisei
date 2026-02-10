@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateApiRequest } from '@/utils/api-auth';
+import { createSegmindClient } from '@/utils/segmind';
 import { getAdminClient, uploadImageToStorage } from '@/utils/storage';
+
+export const maxDuration = 120;
 
 /**
  * GET /api/v1/models
@@ -54,11 +57,21 @@ export async function GET(request: NextRequest) {
  *
  * Create a new AI model.
  *
+ * Two modes:
+ *  1. Upload mode: provide `thumbnailData` (base64 data URI of the face image)
+ *  2. Generate mode: provide `prompt` to generate the model image via AI
+ *
  * Body:
  *  - name          (string, required): Model name
- *  - thumbnailData (string, required): Base64 data URI of the face image
- *  - type          (string, optional): 'uploaded' | 'ai-generated' (default: 'uploaded')
- *  - modelData     (object, optional): { bodyType, tags, age, ethnicity, sex, isActive }
+ *  - thumbnailData (string, optional): Base64 data URI of the face image (upload mode)
+ *  - prompt        (string, optional): AI prompt to generate the model image (generate mode)
+ *  - sex           (string, required for generate mode): 'male' | 'female'
+ *  - age           (number, optional): Model age
+ *  - ethnicity     (string, optional): e.g. 'Japanese', 'Asian', 'Caucasian', 'Mixed'
+ *  - bodyType      (string, optional): 'Slim' | 'Athletic' | 'Curvy'
+ *  - tags          (string[], optional): e.g. ['Cute', 'Casual']
+ *  - type          (string, optional): 'uploaded' | 'ai-generated' (auto-set based on mode)
+ *  - modelData     (object, optional): Legacy — { bodyType, tags, age, ethnicity, sex }
  */
 export async function POST(request: NextRequest) {
     const auth = await authenticateApiRequest(request);
@@ -68,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { name, type, thumbnailData, modelData } = body;
+        const { name, thumbnailData, prompt, sex, age, ethnicity, bodyType, tags, type, modelData } = body;
 
         if (!name || !name.trim()) {
             return NextResponse.json(
@@ -77,21 +90,70 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!thumbnailData) {
+        // Determine mode: generate (prompt provided) or upload (thumbnailData provided)
+        const isGenerateMode = !!prompt;
+
+        if (!isGenerateMode && !thumbnailData) {
             return NextResponse.json(
-                { error: 'thumbnailData is required (base64 data URI of the face image).' },
+                { error: 'Either prompt (to generate) or thumbnailData (to upload) is required.' },
                 { status: 400 },
             );
         }
 
-        // Upload the thumbnail to storage
-        let thumbnailUrl: string;
-        try {
-            thumbnailUrl = await uploadImageToStorage(thumbnailData, `models/${userId}`);
-        } catch (uploadErr) {
-            console.error('Thumbnail upload failed:', uploadErr);
-            return NextResponse.json({ error: 'Image upload failed.' }, { status: 500 });
+        if (isGenerateMode && !sex) {
+            return NextResponse.json(
+                { error: 'sex is required when using prompt-based generation ("male" or "female").' },
+                { status: 400 },
+            );
         }
+
+        let thumbnailUrl: string;
+
+        if (isGenerateMode) {
+            // Generate model image via Segmind z-image-turbo
+            const segmind = createSegmindClient();
+            const imageResult = await segmind.generateImage({
+                prompt: prompt.trim(),
+                steps: 8,
+                guidance_scale: 1,
+                seed: -1,
+                width: 1024,
+                height: 1024,
+                image_format: 'png',
+                quality: 95,
+                base_64: false,
+            });
+
+            if (!imageResult.image) {
+                return NextResponse.json({ error: 'Failed to generate model image.' }, { status: 500 });
+            }
+
+            thumbnailUrl = await uploadImageToStorage(imageResult.image, `models/${userId}`);
+        } else {
+            // Upload mode
+            try {
+                thumbnailUrl = await uploadImageToStorage(thumbnailData, `models/${userId}`);
+            } catch (uploadErr) {
+                console.error('Thumbnail upload failed:', uploadErr);
+                return NextResponse.json({ error: 'Image upload failed.' }, { status: 500 });
+            }
+        }
+
+        // Build model_data — prefer top-level params, fall back to legacy modelData object
+        const resolvedModelData = {
+            bodyType: bodyType || modelData?.bodyType || 'Slim',
+            tags: tags || modelData?.tags || [],
+            age: age || modelData?.age,
+            ethnicity: ethnicity || modelData?.ethnicity,
+            sex: sex || modelData?.sex || 'female',
+            ...(modelData || {}),
+            // Re-apply top-level overrides
+            ...(bodyType && { bodyType }),
+            ...(tags && { tags }),
+            ...(age && { age }),
+            ...(ethnicity && { ethnicity }),
+            ...(sex && { sex }),
+        };
 
         // Insert into ai_models
         const adminClient = getAdminClient();
@@ -100,9 +162,9 @@ export async function POST(request: NextRequest) {
             .insert({
                 user_id: userId,
                 name: name.trim(),
-                type: type || 'uploaded',
+                type: isGenerateMode ? 'ai-generated' : (type || 'uploaded'),
                 thumbnail_url: thumbnailUrl,
-                model_data: modelData || {},
+                model_data: resolvedModelData,
             })
             .select('id, name, thumbnail_url, type, model_data')
             .single();

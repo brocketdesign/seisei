@@ -88,8 +88,8 @@ const endpoints: Endpoint[] = [
         path: '/api/v1/products',
         title: 'Create Product',
         titleJa: '商品登録',
-        description: 'Register a new product with name, image, and campaign association.',
-        status: 'coming-soon',
+        description: 'Create a product — either generate an image via AI prompt or upload your own. Automatically creates the campaign if it doesn\'t exist.',
+        status: 'live',
         icon: <Package className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
         headers: {
@@ -98,20 +98,24 @@ const endpoints: Endpoint[] = [
         },
         bodyParams: [
             { name: 'name', type: 'string', required: true, description: 'Product name.' },
-            { name: 'campaignId', type: 'string', required: true, description: 'UUID of the campaign to associate.' },
-            { name: 'imageData', type: 'string', required: true, description: 'Base64 data URI of the product image.' },
+            { name: 'prompt', type: 'string', required: false, description: 'AI prompt to generate the product image (generate mode). Either prompt or imageData is required.' },
+            { name: 'imageData', type: 'string', required: false, description: 'Base64 data URI of the product image (upload mode). Either prompt or imageData is required.' },
+            { name: 'campaignId', type: 'string', required: false, description: 'UUID of existing campaign to associate.' },
+            { name: 'campaignName', type: 'string', required: false, description: 'Campaign name — auto-created if it doesn\'t exist.' },
             { name: 'description', type: 'string', required: false, description: 'Product description.' },
             { name: 'category', type: 'string', required: false, description: 'Product category.' },
-            { name: 'tags', type: 'string', required: false, description: 'Comma-separated tags.' },
+            { name: 'tags', type: 'string[]', required: false, description: 'Product tags array.' },
         ],
         requestExample: JSON.stringify({
             name: 'オーバーサイズTシャツ',
-            campaignId: '550e8400-e29b-41d4-a716-446655440000',
-            imageData: 'data:image/png;base64,iVBOR...',
+            prompt: 'A white oversized cotton t-shirt laid flat on a pure white background, relaxed fit, e-commerce product photography, perfectly lit, no model, 8k quality, photorealistic',
+            campaignName: 'Summer 2026',
             description: 'コットン100%のオーバーサイズTシャツ',
             category: 'トップス',
+            tags: ['夏', 'Tシャツ', 'コットン'],
         }, null, 2),
         responseExample: JSON.stringify({
+            success: true,
             product: {
                 id: '550e8400-e29b-41d4-a716-446655440001',
                 name: 'オーバーサイズTシャツ',
@@ -119,7 +123,27 @@ const endpoints: Endpoint[] = [
                 campaign_id: '550e8400-e29b-41d4-a716-446655440000',
                 is_active: true,
             },
+            campaign_id: '550e8400-e29b-41d4-a716-446655440000',
         }, null, 2),
+        curlExample: `# Generate mode (AI creates the product image)
+curl -X POST https://seisei.me/api/v1/products \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "オーバーサイズTシャツ",
+    "prompt": "A white oversized cotton t-shirt laid flat on white background, e-commerce photography, 8k quality",
+    "campaignName": "Summer 2026"
+  }'
+
+# Upload mode (provide your own product image)
+curl -X POST https://seisei.me/api/v1/products \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "花柄ブラウス",
+    "imageData": "data:image/png;base64,iVBOR...",
+    "campaignName": "Spring 2026"
+  }'`,
     },
     {
         method: 'GET',
@@ -127,7 +151,7 @@ const endpoints: Endpoint[] = [
         title: 'List Products',
         titleJa: '商品一覧',
         description: 'Retrieve all products for your account, optionally filtered by campaign.',
-        status: 'coming-soon',
+        status: 'live',
         icon: <Package className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
         queryParams: [
@@ -147,6 +171,8 @@ const endpoints: Endpoint[] = [
             ],
             total: 1,
         }, null, 2),
+        curlExample: `curl -X GET "https://seisei.me/api/v1/products?campaignId=550e8400-e29b-41d4-a716-446655440000" \\
+  -H "Authorization: Bearer sk_live_..."`,
     },
 
     // === Models ===
@@ -155,7 +181,7 @@ const endpoints: Endpoint[] = [
         path: '/api/v1/models',
         title: 'Create Model',
         titleJa: 'モデル登録',
-        description: 'Register a new AI model with a face photo for use in image generation and face-swap.',
+        description: 'Register a new AI model — either upload a face photo or generate one via AI prompt. Used for face consistency in editorial generation.',
         status: 'live',
         icon: <Users className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
@@ -165,30 +191,60 @@ const endpoints: Endpoint[] = [
         },
         bodyParams: [
             { name: 'name', type: 'string', required: true, description: 'Model name.' },
-            { name: 'thumbnailData', type: 'string', required: true, description: 'Base64 data URI of the face image.' },
-            { name: 'type', type: "'uploaded' | 'ai-generated'", required: false, description: "Model type (default: 'uploaded')." },
-            { name: 'modelData', type: 'object', required: false, description: 'Additional metadata (bodyType, tags, age, ethnicity, sex).' },
+            { name: 'thumbnailData', type: 'string', required: false, description: 'Base64 data URI of the face image (upload mode).' },
+            { name: 'prompt', type: 'string', required: false, description: 'AI prompt to generate the model image (generate mode). Either thumbnailData or prompt is required.' },
+            { name: 'sex', type: "'male' | 'female'", required: false, description: "Required for generate mode. Model's sex." },
+            { name: 'age', type: 'number', required: false, description: 'Model age.' },
+            { name: 'ethnicity', type: 'string', required: false, description: "e.g. 'Japanese', 'Asian', 'Caucasian', 'Mixed'." },
+            { name: 'bodyType', type: "'Slim' | 'Athletic' | 'Curvy'", required: false, description: "Body type (default: 'Slim')." },
+            { name: 'tags', type: 'string[]', required: false, description: "Style tags, e.g. ['Cute', 'Casual', 'Cool', 'Street']." },
+            { name: 'modelData', type: 'object', required: false, description: 'Legacy — { bodyType, tags, age, ethnicity, sex }.' },
         ],
         requestExample: JSON.stringify({
-            name: 'Model A',
-            thumbnailData: 'data:image/jpeg;base64,/9j/4AAQ...',
-            type: 'uploaded',
-            modelData: {
-                age: '20s',
-                ethnicity: 'japanese',
-                sex: 'female',
-                bodyType: 'slim',
-                tags: ['casual', 'street'],
-            },
+            name: 'Sakura',
+            prompt: 'A beautiful 22-year-old Japanese female fashion model, natural makeup, elegant pose, studio portrait, 8k quality, photorealistic',
+            sex: 'female',
+            age: 22,
+            ethnicity: 'Japanese',
+            bodyType: 'Slim',
+            tags: ['Cute', 'Casual'],
         }, null, 2),
         responseExample: JSON.stringify({
             model: {
                 id: '660e8400-e29b-41d4-a716-446655440010',
-                name: 'Model A',
+                name: 'Sakura',
                 thumbnail_url: 'https://storage.seisei.me/models/...',
-                type: 'uploaded',
+                type: 'ai-generated',
+                model_data: {
+                    sex: 'female',
+                    age: 22,
+                    ethnicity: 'Japanese',
+                    bodyType: 'Slim',
+                    tags: ['Cute', 'Casual'],
+                },
             },
         }, null, 2),
+        curlExample: `# Generate mode (AI creates the model image)
+curl -X POST https://seisei.me/api/v1/models \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Sakura",
+    "prompt": "A beautiful 22-year-old Japanese female fashion model, studio portrait, 8k quality",
+    "sex": "female",
+    "age": 22,
+    "ethnicity": "Japanese"
+  }'
+
+# Upload mode (provide your own face image)
+curl -X POST https://seisei.me/api/v1/models \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Model A",
+    "thumbnailData": "data:image/jpeg;base64,/9j/4AAQ...",
+    "sex": "female"
+  }'`,
     },
     {
         method: 'GET',
@@ -303,7 +359,7 @@ const endpoints: Endpoint[] = [
         path: '/api/v1/generate/editorial',
         title: 'Editorial / Full Pipeline',
         titleJa: 'エディトリアル生成',
-        description: 'Full editorial pipeline: generates an AI model, applies face-swap (if avatar provided), and performs virtual try-on with the outfit.',
+        description: 'Full editorial pipeline: can create products and models inline, applies face-swap for consistency, and performs virtual try-on. Ideal for automated Instagram content creation.',
         status: 'live',
         icon: <ImageIcon className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
@@ -312,34 +368,84 @@ const endpoints: Endpoint[] = [
             'Content-Type': 'application/json',
         },
         bodyParams: [
-            { name: 'outfitImage', type: 'string', required: true, description: 'Base64 data URI of the garment/outfit image.' },
+            { name: 'outfitImage', type: 'string', required: false, description: 'Base64 data URI of the garment/outfit image. One of outfitImage, productId, or createProduct is required.' },
+            { name: 'productId', type: 'string', required: false, description: 'UUID of an existing product — uses its image as the outfit.' },
+            { name: 'createProduct', type: 'boolean', required: false, description: 'If true, generate a product image inline (requires productPrompt and productName).' },
+            { name: 'productPrompt', type: 'string', required: false, description: 'AI prompt for product image generation (when createProduct is true).' },
+            { name: 'productName', type: 'string', required: false, description: 'Product name (when createProduct is true).' },
+            { name: 'productCategory', type: 'string', required: false, description: 'Product category (when createProduct is true).' },
+            { name: 'productTags', type: 'string[]', required: false, description: 'Product tags (when createProduct is true).' },
             { name: 'modelId', type: 'string', required: false, description: 'UUID of an existing AI model to use.' },
             { name: 'modelData', type: 'object', required: false, description: 'Inline model attributes { id, name, age, ethnicity, bodyType, tags, avatar, sex }.' },
+            { name: 'createModel', type: 'boolean', required: false, description: 'If true, generate a model inline (requires modelPrompt).' },
+            { name: 'modelPrompt', type: 'string', required: false, description: 'AI prompt for model image generation (when createModel is true).' },
+            { name: 'modelName', type: 'string', required: false, description: 'Model name (when createModel is true).' },
+            { name: 'sex', type: "'male' | 'female'", required: false, description: "Model sex (default: 'female')." },
+            { name: 'age', type: 'number', required: false, description: 'Model age.' },
+            { name: 'ethnicity', type: 'string', required: false, description: 'Model ethnicity.' },
+            { name: 'bodyType', type: "'Slim' | 'Athletic' | 'Curvy'", required: false, description: "Model body type (default: 'Slim')." },
+            { name: 'modelTags', type: 'string[]', required: false, description: "Model style tags, e.g. ['Cute', 'Casual']." },
             { name: 'background', type: "'studio' | 'outdoor' | 'cafe' | 'natural'", required: false, description: "Background style (default: 'studio')." },
             { name: 'aspectRatio', type: "'1:1' | '4:5' | '9:16'", required: false, description: "Output aspect ratio (default: '1:1')." },
             { name: 'campaignId', type: 'string', required: false, description: 'Campaign UUID to associate the generation with.' },
+            { name: 'campaignName', type: 'string', required: false, description: 'Campaign name — auto-created if it doesn\'t exist.' },
         ],
         requestExample: JSON.stringify({
-            outfitImage: 'data:image/png;base64,iVBOR...',
+            createProduct: true,
+            productPrompt: 'A white oversized cotton t-shirt laid flat on white background, e-commerce photography, 8k quality',
+            productName: 'オーバーサイズTシャツ',
             modelId: '660e8400-e29b-41d4-a716-446655440010',
-            background: 'studio',
+            background: 'outdoor',
             aspectRatio: '4:5',
-            campaignId: '550e8400-e29b-41d4-a716-446655440000',
+            campaignName: 'Summer 2026',
         }, null, 2),
         responseExample: JSON.stringify({
             success: true,
             image_url: 'https://storage.seisei.me/generations/...',
             generation_id: '770e8400-e29b-41d4-a716-446655440020',
-            generation_time: '8.5s',
+            generation_time: '15.2s',
             credits_used: 1,
+            product_id: '550e8400-e29b-41d4-a716-446655440001',
+            model_id: '660e8400-e29b-41d4-a716-446655440010',
+            campaign_id: '550e8400-e29b-41d4-a716-446655440000',
         }, null, 2),
-        curlExample: `curl -X POST https://seisei.me/api/v1/generate/editorial \\
+        curlExample: `# Full automation: create product + use existing model
+curl -X POST https://seisei.me/api/v1/generate/editorial \\
   -H "Authorization: Bearer sk_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "outfitImage": "data:image/png;base64,iVBOR...",
+    "createProduct": true,
+    "productPrompt": "A floral chiffon blouse on white background, e-commerce photography",
+    "productName": "花柄ブラウス",
     "modelId": "660e8400-e29b-41d4-a716-446655440010",
-    "background": "studio"
+    "background": "studio",
+    "campaignName": "Spring 2026"
+  }'
+
+# Full automation: create both product and model
+curl -X POST https://seisei.me/api/v1/generate/editorial \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "createProduct": true,
+    "productPrompt": "Navy linen shorts on white background, e-commerce photography",
+    "productName": "リネンショートパンツ",
+    "createModel": true,
+    "modelPrompt": "A 24-year-old Japanese female fashion model, natural makeup, studio portrait",
+    "modelName": "Sakura",
+    "sex": "female",
+    "background": "outdoor",
+    "campaignName": "Summer 2026"
+  }'
+
+# Use existing product and model
+curl -X POST https://seisei.me/api/v1/generate/editorial \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "productId": "550e8400-e29b-41d4-a716-446655440001",
+    "modelId": "660e8400-e29b-41d4-a716-446655440010",
+    "background": "cafe"
   }'`,
     },
 
@@ -401,10 +507,40 @@ const endpoints: Endpoint[] = [
         path: '/api/v1/campaigns',
         title: 'Create Campaign',
         titleJa: 'キャンペーン作成',
-        description: 'Create a new campaign via API.',
-        status: 'coming-soon',
+        description: 'Create a new campaign to organize products and generations.',
+        status: 'live',
         icon: <Package className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',
+        headers: {
+            'Authorization': 'Bearer sk_live_...',
+            'Content-Type': 'application/json',
+        },
+        bodyParams: [
+            { name: 'name', type: 'string', required: true, description: 'Campaign name.' },
+            { name: 'description', type: 'string', required: false, description: 'Campaign description.' },
+            { name: 'status', type: "'draft' | 'active' | 'scheduled' | 'completed'", required: false, description: "Campaign status (default: 'active')." },
+        ],
+        requestExample: JSON.stringify({
+            name: 'Summer 2026',
+            description: 'Summer collection campaign',
+            status: 'active',
+        }, null, 2),
+        responseExample: JSON.stringify({
+            campaign: {
+                id: '550e8400-e29b-41d4-a716-446655440000',
+                name: 'Summer 2026',
+                description: 'Summer collection campaign',
+                status: 'active',
+                created_at: '2026-02-10T12:00:00.000Z',
+            },
+        }, null, 2),
+        curlExample: `curl -X POST https://seisei.me/api/v1/campaigns \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "Summer 2026",
+    "description": "Summer collection campaign"
+  }'`,
     },
 
     // === Email Generate ===
@@ -601,7 +737,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
     const [expanded, setExpanded] = useState(endpoint.status === 'live');
 
     return (
-        <div id={endpoint.path.replace(/\//g, '-').slice(1)} className="bg-white rounded-xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+        <div id={`${endpoint.method.toLowerCase()}-${endpoint.path.replace(/\//g, '-').slice(1)}`} className="bg-white rounded-xl border border-gray-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
             {/* Header */}
             <button
                 onClick={() => setExpanded(!expanded)}
@@ -855,8 +991,8 @@ export default function ApiDocsPage() {
                 <div className="space-y-1.5">
                     {endpoints.map(ep => (
                         <a
-                            key={ep.path}
-                            href={`#${ep.path.replace(/\//g, '-').slice(1)}`}
+                            key={`${ep.method}-${ep.path}`}
+                            href={`#${ep.method.toLowerCase()}-${ep.path.replace(/\//g, '-').slice(1)}`}
                             className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-900 transition-colors py-1"
                         >
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono ${methodColor(ep.method)}`}>
@@ -873,7 +1009,7 @@ export default function ApiDocsPage() {
             {/* Endpoint cards */}
             <div className="space-y-4">
                 {endpoints.map(ep => (
-                    <EndpointCard key={ep.path} endpoint={ep} />
+                    <EndpointCard key={`${ep.method}-${ep.path}`} endpoint={ep} />
                 ))}
             </div>
 
