@@ -143,8 +143,20 @@ export async function POST(request: NextRequest) {
                 campaignId, campaignName,
                 background, aspectRatio,
             },
-        }).catch((err) => {
+        }).catch(async (err) => {
             console.error(`[editorial task ${taskId}] Unhandled error:`, err);
+            // Update task status to failed if there's an unhandled error
+            try {
+                await adminClient
+                    .from('editorial_tasks')
+                    .update({
+                        status: 'failed',
+                        error: err instanceof Error ? err.message : 'Unexpected error occurred',
+                    })
+                    .eq('id', taskId);
+            } catch (updateErr) {
+                console.error(`[editorial task ${taskId}] Failed to update task status:`, updateErr);
+            }
         });
 
         return NextResponse.json({
@@ -541,7 +553,6 @@ async function processEditorialPipeline({ taskId, userId, body }: PipelineParams
                     ...(resolvedModelId && { model_id: resolvedModelId }),
                     ...(resolvedCampaignId && { campaign_id: resolvedCampaignId }),
                 },
-                updated_at: new Date().toISOString(),
             })
             .eq('id', taskId);
 
@@ -553,7 +564,6 @@ async function processEditorialPipeline({ taskId, userId, body }: PipelineParams
             .update({
                 status: 'failed',
                 error: error instanceof Error ? error.message : 'Editorial generation failed',
-                updated_at: new Date().toISOString(),
             })
             .eq('id', taskId);
     }
