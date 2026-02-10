@@ -584,7 +584,7 @@ function AddProductView({
     setError(null);
 
     try {
-      let imageData: string;
+      let imageData = '';
       
       if (mode === 'upload' && uploadedFile) {
         // Convert file to base64 data URI
