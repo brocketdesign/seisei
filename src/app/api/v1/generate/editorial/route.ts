@@ -123,6 +123,12 @@ export async function POST(request: NextRequest) {
                     { status: 400 },
                 );
             }
+            if (!resolvedCampaignId) {
+                return NextResponse.json(
+                    { error: 'campaignId or campaignName is required when createProduct is true.' },
+                    { status: 400 },
+                );
+            }
 
             const productResult = await segmind.generateImage({
                 prompt: productPrompt.trim(),

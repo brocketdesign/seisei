@@ -370,7 +370,7 @@ curl -X POST https://seisei.me/api/v1/models \\
         bodyParams: [
             { name: 'outfitImage', type: 'string', required: false, description: 'Base64 data URI of the garment/outfit image. One of outfitImage, productId, or createProduct is required.' },
             { name: 'productId', type: 'string', required: false, description: 'UUID of an existing product — uses its image as the outfit.' },
-            { name: 'createProduct', type: 'boolean', required: false, description: 'If true, generate a product image inline (requires productPrompt and productName).' },
+            { name: 'createProduct', type: 'boolean', required: false, description: 'If true, generate a product image inline (requires productPrompt, productName, and either campaignId or campaignName).' },
             { name: 'productPrompt', type: 'string', required: false, description: 'AI prompt for product image generation (when createProduct is true).' },
             { name: 'productName', type: 'string', required: false, description: 'Product name (when createProduct is true).' },
             { name: 'productCategory', type: 'string', required: false, description: 'Product category (when createProduct is true).' },
