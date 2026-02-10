@@ -835,7 +835,7 @@ function AddProductView({
                 {/* Common form fields */}
                 <div className="border-t border-gray-200 pt-5 space-y-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">キャンペーン *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">キャンペーン <span className="text-red-400">*</span></label>
                     <select
                       value={campaignId}
                       onChange={(e) => setCampaignId(e.target.value)}
@@ -848,7 +848,7 @@ function AddProductView({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">商品名 *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">商品名 <span className="text-red-400">*</span></label>
                     <input
                       type="text"
                       value={name}
