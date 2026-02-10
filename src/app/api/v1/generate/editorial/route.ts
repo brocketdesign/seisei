@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
                     .from('editorial_tasks')
                     .update({
                         status: 'failed',
-                        error: err instanceof Error ? err.message : 'Unexpected error occurred',
+                        error: err instanceof Error ? err.message : String(err),
                     })
                     .eq('id', taskId);
             } catch (updateErr) {
