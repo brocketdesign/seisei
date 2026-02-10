@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body = await request.json();
-        const { campaignId, productId, subject, to, templateStyle, customHtml, replyTo } = body;
+        const { campaignId, productId, subject, to, templateStyle, customHtml, replyTo, from } = body;
 
         if (!subject) {
             return NextResponse.json(
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
 
         // If recipients provided, send the email immediately
         if (to) {
-            const data = await sendEmail({ to, subject, html, replyTo });
+            const data = await sendEmail({ to, subject, html, replyTo, from });
             return NextResponse.json({
                 success: true,
                 sent: true,

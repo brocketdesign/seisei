@@ -13,11 +13,16 @@ interface SendEmailOptions {
   subject: string;
   html: string;
   replyTo?: string;
+  from?: string;
 }
 
-export async function sendEmail({ to, subject, html, replyTo }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, replyTo, from }: SendEmailOptions) {
+  const fromAddress = from
+    ? `${from}@seisei.me`
+    : FROM_EMAIL;
+
   const { data, error } = await resend.emails.send({
-    from: FROM_EMAIL,
+    from: fromAddress,
     to: Array.isArray(to) ? to : [to],
     subject,
     html,

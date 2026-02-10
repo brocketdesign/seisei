@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { to, subject, html, replyTo } = await request.json();
+    const { to, subject, html, replyTo, from } = await request.json();
 
     if (!to || !subject || !html) {
       return NextResponse.json(
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await sendEmail({ to, subject, html, replyTo });
+    const data = await sendEmail({ to, subject, html, replyTo, from });
     return NextResponse.json({ success: true, id: data?.id });
   } catch (error) {
     console.error('[api/email] Error:', error);

@@ -59,12 +59,14 @@ const endpoints: Endpoint[] = [
             { name: 'subject', type: 'string', required: true, description: 'Email subject line.' },
             { name: 'html', type: 'string', required: true, description: 'HTML body of the email.' },
             { name: 'replyTo', type: 'string', required: false, description: 'Reply-to email address.' },
+            { name: 'from', type: 'string', required: false, description: 'Custom sender name before @seisei.me (e.g. "marketing" → marketing@seisei.me). Defaults to noreply.' },
         ],
         requestExample: JSON.stringify({
             to: 'customer@example.com',
             subject: '新作コレクションのお知らせ',
             html: '<h1>春コレクション 2026</h1><p>新作アイテムをチェック！</p>',
             replyTo: 'support@yourbrand.com',
+            from: 'marketing',
         }, null, 2),
         responseExample: JSON.stringify({
             success: true,
@@ -427,12 +429,14 @@ const endpoints: Endpoint[] = [
             { name: 'templateStyle', type: "'minimal' | 'editorial' | 'promotional'", required: false, description: "Template style (default: 'minimal')." },
             { name: 'customHtml', type: 'string', required: false, description: 'Custom HTML body (skips template generation).' },
             { name: 'replyTo', type: 'string', required: false, description: 'Reply-to email address.' },
+            { name: 'from', type: 'string', required: false, description: 'Custom sender name before @seisei.me (e.g. "news" → news@seisei.me). Defaults to noreply.' },
         ],
         requestExample: JSON.stringify({
             subject: '春コレクション新作のお知らせ',
             campaignId: '550e8400-e29b-41d4-a716-446655440000',
             productId: '550e8400-e29b-41d4-a716-446655440001',
             to: 'customer@example.com',
+            from: 'news',
         }, null, 2),
         responseExample: JSON.stringify({
             success: true,
