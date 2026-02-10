@@ -516,7 +516,6 @@ function InlineAddProduct({
   onAdded: (product: Product) => void;
   onCancel: () => void;
 }) {
-  const supabase = createClient();
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -545,35 +544,32 @@ function InlineAddProduct({
     setUploading(true); setError(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('ログインが必要です。');
+      // Convert file to base64 data URI
+      const toDataUri = (file: File): Promise<string> =>
+        new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
-      const ext = uploadedFile.name.split('.').pop() || 'jpg';
-      const fileName = `products/${user.id}/${crypto.randomUUID()}.${ext}`;
+      const imageData = await toDataUri(uploadedFile);
 
-      const { error: uploadError } = await supabase.storage
-        .from('generation-images')
-        .upload(fileName, uploadedFile, { contentType: uploadedFile.type, upsert: false });
-
-      if (uploadError) throw new Error(uploadError.message);
-
-      const { data: urlData } = supabase.storage.from('generation-images').getPublicUrl(fileName);
-
-      const { data: product, error: insertError } = await supabase
-        .from('products')
-        .insert({
-          user_id: user.id,
-          campaign_id: campaignId,
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: name.trim(),
-          image_url: urlData.publicUrl,
+          campaignId,
+          imageData,
           category: category.trim() || null,
-          is_active: true,
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (insertError) throw new Error(insertError.message);
-      onAdded(product);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || '追加に失敗しました。');
+
+      onAdded(json.product);
     } catch (err) {
       setError(err instanceof Error ? err.message : '追加に失敗しました。');
     } finally {

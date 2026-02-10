@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { name, campaignId, imageData } = body;
+        const { name, campaignId, imageData, category } = body;
 
         if (!name || !name.trim()) {
             return NextResponse.json({ error: '商品名を入力してください。' }, { status: 400 });
@@ -46,9 +46,10 @@ export async function POST(request: NextRequest) {
                 campaign_id: campaignId,
                 name: name.trim(),
                 image_url: imageUrl,
+                category: category || null,
                 is_active: true,
             })
-            .select('id, campaign_id, name, description, image_url, category, tags, is_active')
+            .select()
             .single();
 
         if (dbError) {
