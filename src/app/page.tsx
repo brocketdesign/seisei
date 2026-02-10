@@ -95,7 +95,7 @@ export default function Home() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-fuchsia-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-fuchsia-500" />
               </span>
-              <span className="text-[11px] sm:text-xs font-semibold text-fuchsia-700">Segmind AI 搭載</span>
+              <span className="text-[11px] sm:text-xs font-semibold text-fuchsia-700">Seisei AI 搭載</span>
             </motion.div>
 
             <motion.h1 {...fadeUp(0.25)} className="text-3xl sm:text-5xl lg:text-7xl font-black tracking-tight text-gray-900 leading-[1.1] sm:leading-[1.05]">
@@ -397,7 +397,7 @@ export default function Home() {
               {
                 icon: Zap,
                 title: '2秒で画像生成',
-                description: '最新のSegmind AIエンジンで、従来の撮影より1000倍速く高品質な画像を大量生成',
+                description: '最新のSeisei AIエンジンで、従来の撮影より1000倍速く高品質な画像を大量生成',
                 accent: 'bg-amber-50 text-amber-600 border-amber-100',
               },
               {
