@@ -22,6 +22,7 @@ import {
   Zap,
   Star,
   MessageSquare,
+  Gift,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -206,6 +207,24 @@ function OnboardingContent() {
 
   const plans = [
     {
+      id: 'free',
+      name: 'フリー',
+      description: '3日間無料でお試し',
+      icon: Gift,
+      monthlyPrice: 0,
+      yearlyPrice: 0,
+      trialDays: 3,
+      recommended: true,
+      features: [
+        { text: '3日間無料トライアル', included: true },
+        { text: '月50枚画像生成', included: true },
+        { text: '標準画質', included: true },
+        { text: 'メールサポート', included: true },
+        { text: '動画生成', included: false },
+        { text: '4K高画質', included: false },
+      ],
+    },
+    {
       id: 'starter',
       name: 'スターター',
       description: '小規模ビジネスに最適',
@@ -228,7 +247,6 @@ function OnboardingContent() {
       icon: Star,
       monthlyPrice: 20000,
       yearlyPrice: 192000,
-      recommended: true,
       features: [
         { text: '月500枚画像生成', included: true },
         { text: '月50本動画生成', included: true },
@@ -894,19 +912,20 @@ function OnboardingContent() {
                   </button>
                 </div>
 
-                {/* Plan cards – 3 columns */}
+                {/* Plan cards – 4 columns */}
                 <motion.div
                   variants={staggerContainer}
                   initial="enter"
                   animate="center"
-                  className="grid grid-cols-1 md:grid-cols-3 gap-5"
+                  className="grid grid-cols-1 md:grid-cols-4 gap-5"
                 >
                   {plans.map((plan) => {
                     const Icon = plan.icon;
+                    const isFreePlan = plan.id === 'free';
                     const price = billingInterval === 'year' ? plan.yearlyPrice : plan.monthlyPrice;
-                    const formattedPrice = `¥${price.toLocaleString()}`;
-                    const period = billingInterval === 'year' ? '/年' : '/月';
-                    const monthlyEquivalent = billingInterval === 'year'
+                    const formattedPrice = isFreePlan ? '¥0' : `¥${price.toLocaleString()}`;
+                    const period = isFreePlan ? '' : (billingInterval === 'year' ? '/年' : '/月');
+                    const monthlyEquivalent = !isFreePlan && billingInterval === 'year'
                       ? `月あたり ¥${Math.round(plan.yearlyPrice / 12).toLocaleString()}`
                       : null;
 
@@ -924,7 +943,7 @@ function OnboardingContent() {
                         {/* Recommended badge */}
                         {plan.recommended && (
                           <div className="bg-black text-white text-xs font-bold text-center py-1.5 tracking-wide">
-                            一番人気
+                            {isFreePlan ? 'おすすめ' : '一番人気'}
                           </div>
                         )}
 
@@ -950,8 +969,11 @@ function OnboardingContent() {
                               <span className="text-4xl font-extrabold tracking-tight text-gray-900">
                                 {formattedPrice}
                               </span>
-                              <span className="text-sm text-gray-400 font-medium">{period}</span>
+                              {period && <span className="text-sm text-gray-400 font-medium">{period}</span>}
                             </div>
+                            {isFreePlan && (
+                              <p className="text-xs text-gray-500 mt-1">3日間無料 → その後 ¥5,000/月</p>
+                            )}
                             {monthlyEquivalent && (
                               <p className="text-xs text-green-600 font-medium mt-1">{monthlyEquivalent}</p>
                             )}
@@ -996,7 +1018,7 @@ function OnboardingContent() {
                                 処理中...
                               </span>
                             ) : (
-                              '選択する'
+                              isFreePlan ? '無料で始める' : '選択する'
                             )}
                           </button>
                         </div>

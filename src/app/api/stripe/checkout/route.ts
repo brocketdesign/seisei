@@ -27,11 +27,24 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        // Free plan is a 3-day trial of the Starter plan
+        const isFreeTrialPlan = planId === 'free';
+        const effectivePlanId = isFreeTrialPlan ? 'starter' : planId;
+        const effectivePlan = isFreeTrialPlan ? PLAN_PRICES['starter'] : plan;
+
         const priceYen = billingInterval === 'year'
-            ? plan.yearlyPriceYen
-            : plan.monthlyPriceYen;
+            ? effectivePlan.yearlyPriceYen
+            : effectivePlan.monthlyPriceYen;
 
         const intervalLabel = billingInterval === 'year' ? '年額' : '月額';
+
+        const planLabel = isFreeTrialPlan
+            ? `生成 - フリートライアル（3日間無料 → ${effectivePlan.name}プラン ${intervalLabel}）`
+            : `生成 - ${plan.name}プラン（${intervalLabel}）`;
+
+        const planDescription = isFreeTrialPlan
+            ? `3日間無料でお試し。トライアル終了後は${effectivePlan.name}プラン（${intervalLabel} ¥${priceYen.toLocaleString()}）に自動移行します。`
+            : plan.features.join('、');
 
         // Create Stripe Checkout session
         const session = await getStripe().checkout.sessions.create({
@@ -42,8 +55,8 @@ export async function POST(request: NextRequest) {
                     price_data: {
                         currency: 'jpy',
                         product_data: {
-                            name: `生成 - ${plan.name}プラン（${intervalLabel}）`,
-                            description: plan.features.join('、'),
+                            name: planLabel,
+                            description: planDescription,
                         },
                         unit_amount: priceYen,
                         recurring: {
@@ -53,10 +66,13 @@ export async function POST(request: NextRequest) {
                     quantity: 1,
                 },
             ],
+            // 3-day free trial for the free plan
+            ...(isFreeTrialPlan ? { subscription_data: { trial_period_days: 3 } } : {}),
             // Store onboarding data in metadata for webhook
             metadata: {
                 planId,
                 billingInterval,
+                isFreeTrialPlan: isFreeTrialPlan ? 'true' : 'false',
                 brandName: onboardingData.brand?.name || '',
                 brandWebsite: onboardingData.brand?.website || '',
                 brandDescription: onboardingData.brand?.description || '',

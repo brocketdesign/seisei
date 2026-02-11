@@ -3,7 +3,7 @@ import { getStripe, PLAN_PRICES } from '@/utils/stripe';
 import { createClient } from '@/utils/supabase/server';
 
 // Plan hierarchy (higher index = higher tier)
-const PLAN_ORDER = ['starter', 'pro', 'business', 'enterprise'];
+const PLAN_ORDER = ['free', 'starter', 'pro', 'business', 'enterprise'];
 
 /**
  * Calculate the prorated amount for upgrading mid-cycle.
