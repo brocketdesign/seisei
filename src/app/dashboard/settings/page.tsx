@@ -241,7 +241,7 @@ function ProfileSettings() {
 }
 
 // ─── Plan hierarchy ────────────────────────────────────────────────
-const PLAN_ORDER = ['starter', 'pro', 'business', 'enterprise'];
+const PLAN_ORDER = ['free', 'starter', 'pro', 'business', 'enterprise'];
 
 // ─── Billing Settings ──────────────────────────────────────────────
 function BillingSettings() {
