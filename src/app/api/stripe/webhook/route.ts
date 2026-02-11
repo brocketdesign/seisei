@@ -60,11 +60,13 @@ export async function POST(request: NextRequest) {
         try {
             // When a trial ends and the subscription becomes active (paid),
             // upgrade the user's plan from "free" to "starter"
-            if (subscription.status === 'active' && !subscription.trial_end) {
-                const previousAttributes = (event.data as Stripe.Event.Data & { previous_attributes?: Record<string, unknown> }).previous_attributes;
-                if (previousAttributes?.trial_end || previousAttributes?.status === 'trialing') {
-                    await handleTrialEnded(subscription);
-                }
+            const previousAttributes = (event.data as Stripe.Event.Data & { previous_attributes?: Record<string, unknown> }).previous_attributes;
+            if (
+                subscription.status === 'active' &&
+                (previousAttributes?.status === 'trialing' ||
+                 (previousAttributes?.trial_end !== undefined && subscription.trial_end !== null && subscription.trial_end <= Math.floor(Date.now() / 1000)))
+            ) {
+                await handleTrialEnded(subscription);
             }
         } catch (error) {
             console.error('Error handling subscription update:', error);
@@ -233,11 +235,22 @@ async function handleTrialEnded(subscription: Stripe.Subscription) {
         return;
     }
 
+    // Check current plan before updating
+    const { data: profile } = await supabaseAdmin.from('profiles')
+        .select('plan')
+        .eq('id', user.id)
+        .single();
+
+    if (profile?.plan && profile.plan !== 'free') {
+        console.warn('[webhook] User already on plan:', profile.plan, '— skipping trial upgrade for:', user.id);
+        return;
+    }
+
     // Update plan from "free" to "starter"
     const { error } = await supabaseAdmin.from('profiles').update({
         plan: 'starter',
         updated_at: new Date().toISOString(),
-    }).eq('id', user.id).eq('plan', 'free');
+    }).eq('id', user.id);
 
     if (error) {
         console.error('[webhook] Error upgrading trial user to starter:', error);
