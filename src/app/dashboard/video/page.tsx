@@ -150,11 +150,11 @@ export default function VideoPage() {
         if (res.ok) {
           const data = await res.json();
           setAllGenerations(
-            (data.history || []).map((h: { id: string; imageUrl: string; prompt?: string; createdAt?: string; campaign_id?: string }) => ({
+            (data.generations || []).map((h: { id: string; generated_image_url: string; prompt?: string; created_at?: string; campaign_id?: string }) => ({
               id: h.id,
-              result_url: h.imageUrl,
+              result_url: h.generated_image_url,
               prompt: h.prompt || null,
-              created_at: h.createdAt || new Date().toISOString(),
+              created_at: h.created_at || new Date().toISOString(),
               campaign_id: h.campaign_id || null,
             }))
           );
