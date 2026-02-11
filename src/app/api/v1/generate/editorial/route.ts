@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { authenticateApiRequest } from '@/utils/api-auth';
 import { createSegmindClient } from '@/utils/segmind';
 import { buildModelPrompt, type AIModel } from '@/types/models';
@@ -131,31 +131,37 @@ export async function POST(request: NextRequest) {
 
         const taskId = task.id;
 
-        // ── Run the pipeline in the background ──────────────────────
-        processEditorialPipeline({
-            taskId,
-            userId,
-            body: {
-                outfitImage, productId, createProduct,
-                productPrompt, productName, productDescription, productCategory, productTags,
-                modelData, modelId, createModel,
-                modelPrompt, modelName, sex, age, ethnicity, bodyType, modelTags,
-                campaignId, campaignName,
-                background, aspectRatio,
-            },
-        }).catch(async (err) => {
-            console.error(`[editorial task ${taskId}] Unhandled error:`, err);
-            // Update task status to failed if there's an unhandled error
+        // ── Run the pipeline after the response is sent ─────────────
+        // Using Next.js after() to keep the serverless function alive
+        // until the pipeline completes, preventing tasks from getting
+        // stuck in "processing" status indefinitely.
+        after(async () => {
             try {
-                await adminClient
-                    .from('editorial_tasks')
-                    .update({
-                        status: 'failed',
-                        error: err instanceof Error ? err.message : String(err),
-                    })
-                    .eq('id', taskId);
-            } catch (updateErr) {
-                console.error(`[editorial task ${taskId}] Failed to update task status:`, updateErr);
+                await processEditorialPipeline({
+                    taskId,
+                    userId,
+                    body: {
+                        outfitImage, productId, createProduct,
+                        productPrompt, productName, productDescription, productCategory, productTags,
+                        modelData, modelId, createModel,
+                        modelPrompt, modelName, sex, age, ethnicity, bodyType, modelTags,
+                        campaignId, campaignName,
+                        background, aspectRatio,
+                    },
+                });
+            } catch (err) {
+                console.error(`[editorial task ${taskId}] Unhandled error:`, err);
+                try {
+                    await adminClient
+                        .from('editorial_tasks')
+                        .update({
+                            status: 'failed',
+                            error: err instanceof Error ? err.message : String(err),
+                        })
+                        .eq('id', taskId);
+                } catch (updateErr) {
+                    console.error(`[editorial task ${taskId}] Failed to update task status:`, updateErr);
+                }
             }
         });
 
