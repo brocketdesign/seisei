@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { authenticateApiRequest } from '@/utils/api-auth';
 import { createSegmindClient } from '@/utils/segmind';
 import { buildModelPrompt, type AIModel } from '@/types/models';
@@ -12,6 +12,13 @@ export const maxDuration = 120;
  *
  * Full editorial pipeline: generates an AI model image, applies face swap
  * (if model avatar provided), and performs virtual try-on with the outfit.
+ *
+ * Returns a task_id immediately. Use GET /api/v1/tasks/:taskId to poll for results.
+ *
+ * Task statuses:
+ *  - processing : Task is still running
+ *  - completed  : Task finished — result contains image_url, generation_id, etc.
+ *  - failed     : Task encountered an error — error field is populated
  *
  * Outfit/Product source (one of):
  *  - outfitImage    (string): Base64 data URI of the outfit/garment image
@@ -73,6 +80,148 @@ export async function POST(request: NextRequest) {
             background, aspectRatio,
         } = body;
 
+        // ── Validate required inputs before creating the task ───────
+        if (createProduct) {
+            if (!productPrompt) {
+                return NextResponse.json(
+                    { error: 'productPrompt is required when createProduct is true.' },
+                    { status: 400 },
+                );
+            }
+            if (!productName) {
+                return NextResponse.json(
+                    { error: 'productName is required when createProduct is true.' },
+                    { status: 400 },
+                );
+            }
+        }
+
+        if (!outfitImage && !productId && !createProduct) {
+            return NextResponse.json(
+                { error: 'An outfit source is required: outfitImage (base64), productId, or createProduct with productPrompt.' },
+                { status: 400 },
+            );
+        }
+
+        if (createModel && !modelPrompt) {
+            return NextResponse.json(
+                { error: 'modelPrompt is required when createModel is true.' },
+                { status: 400 },
+            );
+        }
+
+        // ── Create task record and return immediately ───────────────
+        const { data: task, error: taskError } = await adminClient
+            .from('editorial_tasks')
+            .insert({
+                user_id: userId,
+                status: 'processing',
+                input: body,
+            })
+            .select('id')
+            .single();
+
+        if (taskError || !task) {
+            console.error('Failed to create editorial task:', taskError);
+            return NextResponse.json(
+                { error: 'Failed to create editorial task.' },
+                { status: 500 },
+            );
+        }
+
+        const taskId = task.id;
+
+        // ── Run the pipeline after the response is sent ─────────────
+        // Using Next.js after() to keep the serverless function alive
+        // until the pipeline completes, preventing tasks from getting
+        // stuck in "processing" status indefinitely.
+        after(async () => {
+            try {
+                await processEditorialPipeline({
+                    taskId,
+                    userId,
+                    body: {
+                        outfitImage, productId, createProduct,
+                        productPrompt, productName, productDescription, productCategory, productTags,
+                        modelData, modelId, createModel,
+                        modelPrompt, modelName, sex, age, ethnicity, bodyType, modelTags,
+                        campaignId, campaignName,
+                        background, aspectRatio,
+                    },
+                });
+            } catch (err) {
+                console.error(`[editorial task ${taskId}] Unhandled error:`, err);
+                try {
+                    await adminClient
+                        .from('editorial_tasks')
+                        .update({
+                            status: 'failed',
+                            error: err instanceof Error ? err.message : String(err),
+                        })
+                        .eq('id', taskId);
+                } catch (updateErr) {
+                    console.error(`[editorial task ${taskId}] Failed to update task status:`, updateErr);
+                }
+            }
+        });
+
+        return NextResponse.json({
+            task_id: taskId,
+            status: 'processing',
+            message: 'Editorial generation started. Use GET /api/v1/tasks/:taskId to check status.',
+        }, { status: 202 });
+    } catch (error) {
+        console.error('[api/v1/generate/editorial] Error:', error);
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : 'Editorial generation failed' },
+            { status: 500 },
+        );
+    }
+}
+
+// ── Background pipeline ─────────────────────────────────────────────
+interface PipelineParams {
+    taskId: string;
+    userId: string;
+    body: {
+        outfitImage?: string;
+        productId?: string;
+        createProduct?: boolean;
+        productPrompt?: string;
+        productName?: string;
+        productDescription?: string;
+        productCategory?: string;
+        productTags?: string[];
+        modelData?: Record<string, unknown>;
+        modelId?: string;
+        createModel?: boolean;
+        modelPrompt?: string;
+        modelName?: string;
+        sex?: string;
+        age?: number;
+        ethnicity?: string;
+        bodyType?: string;
+        modelTags?: string[];
+        campaignId?: string;
+        campaignName?: string;
+        background?: string;
+        aspectRatio?: string;
+    };
+}
+
+async function processEditorialPipeline({ taskId, userId, body }: PipelineParams) {
+    const adminClient = getAdminClient();
+
+    try {
+        const {
+            outfitImage, productId, createProduct,
+            productPrompt, productName, productDescription, productCategory, productTags,
+            modelData: inputModelData, modelId, createModel,
+            modelPrompt, modelName, sex, age, ethnicity, bodyType, modelTags,
+            campaignId, campaignName,
+            background, aspectRatio,
+        } = body;
+
         const startTime = Date.now();
         const segmind = createSegmindClient();
 
@@ -98,8 +247,7 @@ export async function POST(request: NextRequest) {
                     .single();
 
                 if (campError) {
-                    console.error('Campaign creation failed:', campError);
-                    return NextResponse.json({ error: 'Failed to create campaign.' }, { status: 500 });
+                    throw new Error(`Campaign creation failed: ${campError.message}`);
                 }
                 resolvedCampaignId = newCampaign.id;
             }
@@ -131,7 +279,7 @@ export async function POST(request: NextRequest) {
             }
 
             const productResult = await segmind.generateImage({
-                prompt: productPrompt.trim(),
+                prompt: productPrompt!.trim(),
                 negative_prompt: 'person, model, mannequin, low quality, blurry, deformed',
                 steps: 8,
                 guidance_scale: 1,
@@ -144,10 +292,9 @@ export async function POST(request: NextRequest) {
             });
 
             if (!productResult.image) {
-                return NextResponse.json({ error: 'Failed to generate product image.' }, { status: 500 });
+                throw new Error('Failed to generate product image.');
             }
 
-            // Upload and save product to DB
             const productImageUrl = await uploadImageToStorage(productResult.image, 'products');
 
             const { data: product, error: prodError } = await adminClient
@@ -155,7 +302,7 @@ export async function POST(request: NextRequest) {
                 .insert({
                     user_id: userId,
                     campaign_id: resolvedCampaignId,
-                    name: productName.trim(),
+                    name: productName!.trim(),
                     description: productDescription || null,
                     image_url: productImageUrl,
                     category: productCategory || null,
@@ -166,14 +313,12 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (prodError) {
-                console.error('Product creation failed:', prodError);
-                return NextResponse.json({ error: 'Failed to save product.' }, { status: 500 });
+                throw new Error(`Product creation failed: ${prodError.message}`);
             }
 
             resolvedOutfitImage = product.image_url;
             createdProductId = product.id;
         } else if (productId) {
-            // Use existing product's image
             const { data: dbProduct } = await adminClient
                 .from('products')
                 .select('id, image_url')
@@ -182,34 +327,23 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (!dbProduct) {
-                return NextResponse.json({ error: 'Product not found.' }, { status: 404 });
+                throw new Error('Product not found.');
             }
             resolvedOutfitImage = dbProduct.image_url;
             createdProductId = dbProduct.id;
         }
 
         if (!resolvedOutfitImage) {
-            return NextResponse.json(
-                { error: 'An outfit source is required: outfitImage (base64), productId, or createProduct with productPrompt.' },
-                { status: 400 },
-            );
+            throw new Error('An outfit source is required: outfitImage (base64), productId, or createProduct with productPrompt.');
         }
 
         // ── Resolve model ───────────────────────────────────────────
-        let resolvedModelData = modelData;
+        let resolvedModelData = inputModelData;
         let resolvedModelId: string | null = null;
 
         if (createModel) {
-            // Generate a model inline
-            if (!modelPrompt) {
-                return NextResponse.json(
-                    { error: 'modelPrompt is required when createModel is true.' },
-                    { status: 400 },
-                );
-            }
-
             const modelImageResult = await segmind.generateImage({
-                prompt: modelPrompt.trim(),
+                prompt: modelPrompt!.trim(),
                 steps: 8,
                 guidance_scale: 1,
                 seed: -1,
@@ -221,7 +355,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (!modelImageResult.image) {
-                return NextResponse.json({ error: 'Failed to generate model image.' }, { status: 500 });
+                throw new Error('Failed to generate model image.');
             }
 
             const modelThumbnailUrl = await uploadImageToStorage(modelImageResult.image, `models/${userId}`);
@@ -247,8 +381,7 @@ export async function POST(request: NextRequest) {
                 .single();
 
             if (modelError) {
-                console.error('Model creation failed:', modelError);
-                return NextResponse.json({ error: 'Failed to save model.' }, { status: 500 });
+                throw new Error(`Model creation failed: ${modelError.message}`);
             }
 
             resolvedModelData = {
@@ -278,7 +411,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (resolvedModelData?.id) {
-            resolvedModelId = resolvedModelData.id;
+            resolvedModelId = resolvedModelData.id as string;
         }
 
         // ── Parse aspect ratio to dimensions ────────────────────────
@@ -309,16 +442,16 @@ export async function POST(request: NextRequest) {
         let stylePrompt: string;
         if (resolvedModelData) {
             const rosterModel: AIModel = {
-                id: resolvedModelData.id || 'api',
-                name: resolvedModelData.name || 'Model',
+                id: (resolvedModelData.id as string) || 'api',
+                name: (resolvedModelData.name as string) || 'Model',
                 avatar: '',
-                tags: resolvedModelData.tags || [],
+                tags: (resolvedModelData.tags as string[]) || [],
                 isActive: true,
-                bodyType: resolvedModelData.bodyType || 'Slim',
+                bodyType: (resolvedModelData.bodyType as AIModel['bodyType']) || 'Slim',
                 isLocked: false,
-                age: resolvedModelData.age,
-                ethnicity: resolvedModelData.ethnicity,
-                sex: resolvedModelData.sex || 'female',
+                age: resolvedModelData.age as number | undefined,
+                ethnicity: resolvedModelData.ethnicity as string | undefined,
+                sex: (resolvedModelData.sex as AIModel['sex']) || 'female',
             };
             stylePrompt = buildModelPrompt(rosterModel);
         } else {
@@ -327,12 +460,10 @@ export async function POST(request: NextRequest) {
 
         const fullModelPrompt = `Full-body professional fashion photograph of ${stylePrompt}, standing ${bgPrompt}. Photorealistic, high quality fashion photography, 8k resolution, sharp focus, professional studio lighting.`;
 
-        // ── Step 1: Generate model image (if not already generated inline) ──
+        // ── Step 1: Generate model image ────────────────────────────
         let generatedModelUrl: string;
 
         if (createModel && resolvedModelData?.avatar) {
-            // Model was already generated above, use its thumbnail as the base image
-            // But we still need a full-body image for try-on
             const modelResult = await segmind.generateImage({
                 prompt: fullModelPrompt,
                 width,
@@ -346,7 +477,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (!modelResult.image) {
-                return NextResponse.json({ error: 'Failed to generate full-body model image.' }, { status: 500 });
+                throw new Error('Failed to generate full-body model image.');
             }
             generatedModelUrl = await uploadImageToStorage(modelResult.image, 'models');
         } else {
@@ -363,7 +494,7 @@ export async function POST(request: NextRequest) {
             });
 
             if (!modelResult.image) {
-                return NextResponse.json({ error: 'Failed to generate model image.' }, { status: 500 });
+                throw new Error('Failed to generate model image.');
             }
             generatedModelUrl = await uploadImageToStorage(modelResult.image, 'models');
         }
@@ -375,7 +506,7 @@ export async function POST(request: NextRequest) {
         }
 
         // ── Step 3: Face swap (if model avatar available) ───────────
-        const modelAvatarUrl = resolvedModelData?.avatar;
+        const modelAvatarUrl = resolvedModelData?.avatar as string | undefined;
         let faceSwappedModelUrl = generatedModelUrl;
 
         if (modelAvatarUrl) {
@@ -416,7 +547,7 @@ export async function POST(request: NextRequest) {
 
         const generationTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
-        // ── Save to database ────────────────────────────────────────
+        // ── Save to generations table ───────────────────────────────
         const { data: generation } = await adminClient
             .from('generations')
             .insert({
@@ -433,21 +564,33 @@ export async function POST(request: NextRequest) {
             .select()
             .single();
 
-        return NextResponse.json({
-            success: true,
-            image_url: generatedImageUrl,
-            generation_id: generation?.id || null,
-            generation_time: `${generationTime}s`,
-            credits_used: 1,
-            ...(createdProductId && { product_id: createdProductId }),
-            ...(resolvedModelId && { model_id: resolvedModelId }),
-            ...(resolvedCampaignId && { campaign_id: resolvedCampaignId }),
-        });
+        // ── Mark task as completed ──────────────────────────────────
+        await adminClient
+            .from('editorial_tasks')
+            .update({
+                status: 'completed',
+                result: {
+                    success: true,
+                    image_url: generatedImageUrl,
+                    generation_id: generation?.id || null,
+                    generation_time: `${generationTime}s`,
+                    credits_used: 1,
+                    ...(createdProductId && { product_id: createdProductId }),
+                    ...(resolvedModelId && { model_id: resolvedModelId }),
+                    ...(resolvedCampaignId && { campaign_id: resolvedCampaignId }),
+                },
+            })
+            .eq('id', taskId);
+
     } catch (error) {
-        console.error('[api/v1/generate/editorial] Error:', error);
-        return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Editorial generation failed' },
-            { status: 500 },
-        );
+        console.error(`[editorial task ${taskId}] Pipeline error:`, error);
+
+        await adminClient
+            .from('editorial_tasks')
+            .update({
+                status: 'failed',
+                error: error instanceof Error ? error.message : 'Editorial generation failed',
+            })
+            .eq('id', taskId);
     }
 }

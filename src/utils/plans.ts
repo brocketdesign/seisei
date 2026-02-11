@@ -15,6 +15,13 @@ export interface PlanConfig {
 
 // Plan price IDs mapping
 export const PLAN_PRICES: Record<string, PlanConfig> = {
+    free: {
+        name: 'フリー',
+        monthlyPriceYen: 0,
+        yearlyPriceYen: 0,
+        limits: { images: 10, videos: 0 },
+        features: ['3日間無料トライアル', '月10枚画像生成', '標準画質', 'メールサポート'],
+    },
     starter: {
         name: 'スターター',
         monthlyPriceYen: 5000,

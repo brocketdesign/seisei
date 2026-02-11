@@ -22,6 +22,12 @@ import {
   Zap,
   Star,
   MessageSquare,
+  Gift,
+  Gavel,
+  Store,
+  Share2,
+  Monitor,
+  type LucideIcon,
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
@@ -195,16 +201,75 @@ function OnboardingContent() {
     { id: 'fem', label: 'フェミニン', desc: '柔らかく女性らしい' },
   ];
 
-  const platforms = [
-    { id: 'rakuten', label: '楽天市場', icon: ShoppingBag },
-    { id: 'instagram', label: 'Instagram', icon: Instagram },
-    { id: 'shopify', label: 'BASE / Shopify', icon: Globe },
-    { id: 'amazon', label: 'Amazon', icon: ShoppingBag },
-    { id: 'zozotown', label: 'ZOZOTOWN', icon: Tag },
-    { id: 'own_ec', label: '自社EC', icon: Globe },
+  const platformCategories: {
+    title: string;
+    icon: LucideIcon;
+    platforms: { id: string; label: string }[];
+  }[] = [
+    {
+      title: 'フリマ',
+      icon: Gavel,
+      platforms: [
+        { id: 'yahoo_auction', label: 'ヤフオク!' },
+        { id: 'mercari', label: 'メルカリ' },
+        { id: 'rakuma', label: 'ラクマ' },
+      ],
+    },
+    {
+      title: '大手ショッピングモール',
+      icon: ShoppingBag,
+      platforms: [
+        { id: 'rakuten', label: '楽天市場' },
+        { id: 'yahoo_shopping', label: 'Yahoo!ショッピング' },
+        { id: 'amazon', label: 'Amazon' },
+        { id: 'zozotown', label: 'ZOZOTOWN' },
+      ],
+    },
+    {
+      title: 'ネットショップ作成',
+      icon: Store,
+      platforms: [
+        { id: 'base', label: 'BASE' },
+        { id: 'shopify', label: 'Shopify' },
+        { id: 'stores', label: 'STORES' },
+      ],
+    },
+    {
+      title: 'SNS',
+      icon: Share2,
+      platforms: [
+        { id: 'instagram', label: 'Instagram Shop' },
+        { id: 'tiktok', label: 'TikTok Shop' },
+      ],
+    },
+    {
+      title: '自社サイト',
+      icon: Monitor,
+      platforms: [
+        { id: 'own_ec', label: '自社ECサイト' },
+      ],
+    },
   ];
 
   const plans = [
+    {
+      id: 'free',
+      name: 'フリー',
+      description: '3日間無料でお試し',
+      icon: Gift,
+      monthlyPrice: 0,
+      yearlyPrice: 0,
+      trialDays: 3,
+      recommended: true,
+      features: [
+        { text: '3日間無料トライアル', included: true },
+        { text: '月10枚画像生成', included: true },
+        { text: '標準画質', included: true },
+        { text: 'メールサポート', included: true },
+        { text: '動画生成', included: false },
+        { text: '4K高画質', included: false },
+      ],
+    },
     {
       id: 'starter',
       name: 'スターター',
@@ -228,7 +293,6 @@ function OnboardingContent() {
       icon: Star,
       monthlyPrice: 20000,
       yearlyPrice: 192000,
-      recommended: true,
       features: [
         { text: '月500枚画像生成', included: true },
         { text: '月50本動画生成', included: true },
@@ -462,7 +526,7 @@ function OnboardingContent() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center py-12 px-4 overflow-hidden">
-        <div className="max-w-3xl w-full">
+        <div className={`w-full transition-all duration-500 ${step === 'plan' ? 'max-w-6xl' : 'max-w-3xl'}`}>
           <AnimatePresence mode="wait" custom={direction}>
             {/* ============================================ */}
             {/* Step 1: Brand Profile                        */}
@@ -803,32 +867,42 @@ function OnboardingContent() {
                   variants={staggerContainer}
                   initial="enter"
                   animate="center"
-                  className="grid grid-cols-2 md:grid-cols-3 gap-4"
+                  className="space-y-6"
                 >
-                  {platforms.map((p) => {
-                    const Icon = p.icon;
-                    const isSelected = selectedPlatforms.includes(p.id);
+                  {platformCategories.map((category) => {
+                    const CategoryIcon = category.icon;
                     return (
-                      <motion.button
-                        key={p.id}
-                        variants={staggerItem}
-                        whileHover={{ y: -2 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => setSelectedPlatforms(toggle(selectedPlatforms, p.id))}
-                        className={`p-6 flex flex-col items-center justify-center gap-3 border rounded-lg transition-colors duration-200 ${
-                          isSelected
-                            ? 'border-black bg-gray-50 ring-1 ring-black'
-                            : 'border-gray-200 bg-white hover:border-gray-300'
-                        }`}
-                      >
-                        <Icon className={`w-6 h-6 ${isSelected ? 'text-black' : 'text-gray-400'}`} />
-                        <span className="font-medium text-sm">{p.label}</span>
-                        {isSelected && (
-                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                            <Check className="w-4 h-4 text-black" />
-                          </motion.div>
-                        )}
-                      </motion.button>
+                      <motion.div key={category.title} variants={staggerItem} className="space-y-3">
+                        <div className="flex items-center gap-2 text-gray-700">
+                          <CategoryIcon className="w-4 h-4" />
+                          <span className="text-sm font-semibold">{category.title}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {category.platforms.map((p) => {
+                            const isSelected = selectedPlatforms.includes(p.id);
+                            return (
+                              <motion.button
+                                key={p.id}
+                                whileHover={{ y: -1 }}
+                                whileTap={{ scale: 0.97 }}
+                                onClick={() => setSelectedPlatforms(toggle(selectedPlatforms, p.id))}
+                                className={`px-4 py-2.5 flex items-center gap-2 border rounded-full text-sm font-medium transition-colors duration-200 ${
+                                  isSelected
+                                    ? 'border-black bg-black text-white'
+                                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                                }`}
+                              >
+                                <span>{p.label}</span>
+                                {isSelected && (
+                                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                                    <Check className="w-3.5 h-3.5" />
+                                  </motion.div>
+                                )}
+                              </motion.button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
                     );
                   })}
                 </motion.div>
@@ -894,19 +968,21 @@ function OnboardingContent() {
                   </button>
                 </div>
 
-                {/* Plan cards – 3 columns */}
+                {/* Plan cards – 3 visible with horizontal scroll on desktop, single column on mobile */}
                 <motion.div
                   variants={staggerContainer}
                   initial="enter"
                   animate="center"
-                  className="grid grid-cols-1 md:grid-cols-3 gap-5"
+                  className="flex flex-col md:flex-row gap-6 md:overflow-x-auto md:snap-x md:snap-mandatory md:pb-4 md:-mx-2 md:px-2"
+                  style={{ scrollbarColor: '#d1d5db transparent' }}
                 >
                   {plans.map((plan) => {
                     const Icon = plan.icon;
+                    const isFreePlan = plan.id === 'free';
                     const price = billingInterval === 'year' ? plan.yearlyPrice : plan.monthlyPrice;
-                    const formattedPrice = `¥${price.toLocaleString()}`;
-                    const period = billingInterval === 'year' ? '/年' : '/月';
-                    const monthlyEquivalent = billingInterval === 'year'
+                    const formattedPrice = isFreePlan ? '¥0' : `¥${price.toLocaleString()}`;
+                    const period = isFreePlan ? '' : (billingInterval === 'year' ? '/年' : '/月');
+                    const monthlyEquivalent = !isFreePlan && billingInterval === 'year'
                       ? `月あたり ¥${Math.round(plan.yearlyPrice / 12).toLocaleString()}`
                       : null;
 
@@ -915,7 +991,7 @@ function OnboardingContent() {
                         key={plan.id}
                         variants={staggerItem}
                         whileHover={{ y: -6, transition: { duration: 0.2 } }}
-                        className={`relative rounded-2xl border-2 flex flex-col overflow-hidden transition-shadow duration-300 ${
+                        className={`relative rounded-2xl border-2 flex flex-col overflow-hidden transition-shadow duration-300 snap-start flex-shrink-0 w-full md:w-[calc(33.333%-1rem)] md:min-w-[320px] ${
                           plan.recommended
                             ? 'border-black shadow-xl bg-white'
                             : 'border-gray-200 bg-white hover:shadow-lg hover:border-gray-300'
@@ -923,54 +999,57 @@ function OnboardingContent() {
                       >
                         {/* Recommended badge */}
                         {plan.recommended && (
-                          <div className="bg-black text-white text-xs font-bold text-center py-1.5 tracking-wide">
-                            一番人気
+                          <div className="bg-black text-white text-sm font-bold text-center py-2 tracking-wide">
+                            {isFreePlan ? 'おすすめ' : '一番人気'}
                           </div>
                         )}
 
-                        <div className="p-6 flex flex-col flex-1">
+                        <div className="p-8 flex flex-col flex-1">
                           {/* Plan header */}
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                          <div className="flex items-center gap-4 mb-6">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
                               plan.recommended
                                 ? 'bg-black text-white'
                                 : 'bg-gray-100 text-gray-600'
                             }`}>
-                              <Icon className="w-5 h-5" />
+                              <Icon className="w-6 h-6" />
                             </div>
                             <div>
-                              <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-                              <p className="text-xs text-gray-400">{plan.description}</p>
+                              <h3 className="text-xl font-bold text-gray-900">{plan.name}</h3>
+                              <p className="text-sm text-gray-400">{plan.description}</p>
                             </div>
                           </div>
 
                           {/* Price */}
-                          <div className="mb-6">
+                          <div className="mb-8">
                             <div className="flex items-baseline gap-1">
-                              <span className="text-4xl font-extrabold tracking-tight text-gray-900">
+                              <span className="text-5xl font-extrabold tracking-tight text-gray-900">
                                 {formattedPrice}
                               </span>
-                              <span className="text-sm text-gray-400 font-medium">{period}</span>
+                              {period && <span className="text-base text-gray-400 font-medium">{period}</span>}
                             </div>
+                            {isFreePlan && (
+                              <p className="text-sm text-gray-500 mt-2">3日間無料 → その後 ¥5,000/月</p>
+                            )}
                             {monthlyEquivalent && (
-                              <p className="text-xs text-green-600 font-medium mt-1">{monthlyEquivalent}</p>
+                              <p className="text-sm text-green-600 font-medium mt-2">{monthlyEquivalent}</p>
                             )}
                           </div>
 
                           {/* Divider */}
-                          <div className="h-px bg-gray-100 mb-5" />
+                          <div className="h-px bg-gray-100 mb-6" />
 
                           {/* Features */}
-                          <ul className="space-y-3 mb-8 flex-1">
+                          <ul className="space-y-4 mb-10 flex-1">
                             {plan.features.map((f, i) => (
-                              <li key={i} className="flex items-center gap-2.5 text-sm">
+                              <li key={i} className="flex items-center gap-3 text-base">
                                 {f.included ? (
-                                  <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
-                                    <Check className="w-3 h-3 text-green-600" />
+                                  <div className="w-6 h-6 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                                    <Check className="w-3.5 h-3.5 text-green-600" />
                                   </div>
                                 ) : (
-                                  <div className="w-5 h-5 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
-                                    <span className="block w-2 h-px bg-gray-300" />
+                                  <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0">
+                                    <span className="block w-2.5 h-px bg-gray-300" />
                                   </div>
                                 )}
                                 <span className={f.included ? 'text-gray-700' : 'text-gray-300'}>
@@ -984,7 +1063,7 @@ function OnboardingContent() {
                           <button
                             onClick={() => handlePlanSelect(plan.id)}
                             disabled={checkoutLoading !== null}
-                            className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            className={`w-full py-4 rounded-xl text-base font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
                               plan.recommended
                                 ? 'bg-black text-white hover:bg-gray-800 shadow-lg shadow-black/10 hover:shadow-xl hover:shadow-black/15'
                                 : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
@@ -996,7 +1075,7 @@ function OnboardingContent() {
                                 処理中...
                               </span>
                             ) : (
-                              '選択する'
+                              isFreePlan ? '無料で始める' : '選択する'
                             )}
                           </button>
                         </div>

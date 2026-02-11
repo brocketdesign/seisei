@@ -19,6 +19,7 @@ import {
   Sparkles,
   ChevronRight,
   X,
+  Clock,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { PLAN_PRICES } from '@/utils/plans';
@@ -241,7 +242,7 @@ function ProfileSettings() {
 }
 
 // ─── Plan hierarchy ────────────────────────────────────────────────
-const PLAN_ORDER = ['starter', 'pro', 'business', 'enterprise'];
+const PLAN_ORDER = ['free', 'starter', 'pro', 'business', 'enterprise'];
 
 // ─── Billing Settings ──────────────────────────────────────────────
 function BillingSettings() {
@@ -263,6 +264,7 @@ function BillingSettings() {
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
 
   // Single effect: read URL params, verify upgrade with Stripe if needed,
   // fetch/poll profile, and update state.
@@ -306,14 +308,14 @@ function BillingSettings() {
       const fetchProfile = async () => {
         const { data: profile, error } = await supabase
           .from('profiles')
-          .select('plan, billing_interval')
+          .select('plan, billing_interval, created_at')
           .eq('id', user.id)
           .single();
         // Fallback if billing_interval column doesn't exist yet
         if (error && !profile) {
           const { data: fallback } = await supabase
             .from('profiles')
-            .select('plan')
+            .select('plan, created_at')
             .eq('id', user.id)
             .single();
           return fallback;
@@ -346,6 +348,7 @@ function BillingSettings() {
       }
       // If the DB never caught up, keep the optimistic value already set above.
       setBillingInterval(dbInterval);
+      setCreatedAt((profile as Record<string, unknown>)?.created_at as string ?? null);
 
       // ── 5. Fetch usage this billing period ──────────────────────
       const periodStart = new Date(
@@ -461,6 +464,18 @@ function BillingSettings() {
   const nextBilling = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
   const nextBillingStr = nextBilling.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  // Calculate free trial days remaining (3-day trial)
+  const FREE_TRIAL_DAYS = 3;
+  let trialDaysRemaining: number | null = null;
+  let trialEndDate: string | null = null;
+  if (plan === 'free' && createdAt) {
+    const created = new Date(createdAt);
+    const trialEnd = new Date(created.getTime() + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    const msRemaining = trialEnd.getTime() - now.getTime();
+    trialDaysRemaining = Math.max(0, Math.ceil(msRemaining / (24 * 60 * 60 * 1000)));
+    trialEndDate = trialEnd.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Current Plan Card */}
@@ -472,11 +487,55 @@ function BillingSettings() {
           <div>
             <p className="font-bold text-base sm:text-lg text-gray-900">{planConfig.name}</p>
             <p className="text-xs sm:text-sm text-gray-500">
-              ¥{(billingInterval === 'year' ? planConfig.yearlyPriceYen : planConfig.monthlyPriceYen).toLocaleString()} / {billingInterval === 'year' ? '年' : '月'}
+              {plan === 'free'
+                ? '3日間無料トライアル → スタータープラン（¥5,000/月）'
+                : `¥${(billingInterval === 'year' ? planConfig.yearlyPriceYen : planConfig.monthlyPriceYen).toLocaleString()} / ${billingInterval === 'year' ? '年' : '月'}`
+              }
             </p>
           </div>
-          <span className="self-start sm:self-center px-3 py-1 text-xs font-medium bg-green-50 text-green-700 border border-green-200 rounded-full">有効</span>
+          <span className={`self-start sm:self-center px-3 py-1 text-xs font-medium rounded-full ${
+            plan === 'free'
+              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : 'bg-green-50 text-green-700 border border-green-200'
+          }`}>
+            {plan === 'free' ? 'トライアル中' : '有効'}
+          </span>
         </div>
+
+        {/* Free trial countdown */}
+        {plan === 'free' && trialDaysRemaining !== null && (
+          <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-12 h-12 bg-amber-100 rounded-full flex-shrink-0">
+                <Clock className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-amber-700">{trialDaysRemaining}</span>
+                  <span className="text-sm font-medium text-amber-600">日残り</span>
+                </div>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  {trialDaysRemaining > 0
+                    ? `${trialEndDate}にスタータープラン（¥5,000/月）に自動アップグレードされます`
+                    : 'まもなくスタータープランに自動アップグレードされます'}
+                </p>
+              </div>
+            </div>
+            {/* Visual progress bar for trial */}
+            <div className="mt-3">
+              <div className="w-full h-2 bg-amber-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round(((FREE_TRIAL_DAYS - trialDaysRemaining) / FREE_TRIAL_DAYS) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-amber-500 mt-1">
+                <span>開始日</span>
+                <span>自動アップグレード</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Usage bars */}
         <div className="mt-5 sm:mt-6 space-y-4">
@@ -509,8 +568,8 @@ function BillingSettings() {
           )}
 
           <div className="flex justify-between text-xs sm:text-sm pt-2 border-t border-gray-100">
-            <span className="text-gray-600">次回請求日</span>
-            <span className="font-medium text-gray-900">{nextBillingStr}</span>
+            <span className="text-gray-600">{plan === 'free' ? '自動アップグレード日' : '次回請求日'}</span>
+            <span className="font-medium text-gray-900">{plan === 'free' && trialEndDate ? trialEndDate : nextBillingStr}</span>
           </div>
         </div>
       </div>

@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   AlertCircle,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
@@ -430,17 +431,30 @@ function AddProductView({
   selectedCampaignId: string | null;
   onProductAdded: (product: Product) => void;
 }) {
+  // Mode state
+  const [mode, setMode] = useState<'upload' | 'generate'>('upload');
+  
+  // Common state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [tags, setTags] = useState('');
   const [campaignId, setCampaignId] = useState(selectedCampaignId || '');
+  const [error, setError] = useState<string | null>(null);
+  
+  // Upload mode state
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Generate mode state
+  const [genPrompt, setGenPrompt] = useState('');
+  const [genStyle, setGenStyle] = useState('');
+  const [generatedPreview, setGeneratedPreview] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -481,9 +495,88 @@ function AddProductView({
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [previewUrl]);
 
+  // Generate AI product preview
+  const handleGeneratePreview = async () => {
+    if (!genPrompt.trim()) {
+      setGenerateError('商品の説明を入力してください。');
+      return;
+    }
+
+    setIsGenerating(true);
+    setGenerateError(null);
+    setGeneratedPreview(null);
+
+    try {
+      const prompt = `Professional product photography of ${genPrompt.trim()}. Clean white background, studio lighting, high quality, photorealistic, 8k resolution, sharp focus.${genStyle ? ` Style: ${genStyle}.` : ''}`;
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'generate',
+          prompt,
+          aspectRatio: '1:1',
+        }),
+      });
+
+      if (!response.ok && !response.body) {
+        throw new Error('サーバーエラーが発生しました。');
+      }
+
+      // Read SSE stream
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lastNewline = buffer.lastIndexOf('\n');
+        if (lastNewline === -1) continue;
+
+        const complete = buffer.substring(0, lastNewline);
+        buffer = buffer.substring(lastNewline + 1);
+        const lines = complete.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            let data: Record<string, unknown>;
+            try {
+              data = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
+
+            if (currentEvent === 'complete') {
+              setGeneratedPreview(data.image as string);
+            } else if (currentEvent === 'error') {
+              throw new Error((data.error as string) || '生成に失敗しました。');
+            }
+            currentEvent = '';
+          }
+        }
+      }
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : '生成に失敗しました。');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!uploadedFile || !name.trim() || !campaignId) {
-      setError('商品名、画像、キャンペーンは必須です。');
+    if (!name.trim() || !campaignId) {
+      setError('商品名とキャンペーンは必須です。');
+      return;
+    }
+
+    const hasImage = mode === 'upload' ? !!uploadedFile : !!generatedPreview;
+    if (!hasImage) {
+      setError(mode === 'upload' ? '画像をアップロードしてください。' : 'まずプレビューを生成してください。');
       return;
     }
 
@@ -491,16 +584,23 @@ function AddProductView({
     setError(null);
 
     try {
-      // Convert file to base64 data URI
-      const toDataUri = (file: File): Promise<string> =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-      const imageData = await toDataUri(uploadedFile);
+      let imageData = '';
+      
+      if (mode === 'upload' && uploadedFile) {
+        // Convert file to base64 data URI
+        const toDataUri = (file: File): Promise<string> =>
+          new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        imageData = await toDataUri(uploadedFile);
+      } else if (mode === 'generate' && generatedPreview) {
+        imageData = generatedPreview;
+      } else {
+        throw new Error('画像が見つかりません。');
+      }
 
       const res = await fetch('/api/products', {
         method: 'POST',
@@ -535,19 +635,42 @@ function AddProductView({
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Mode Tabs */}
+        <div className="border-b border-gray-100 flex">
+          <button 
+            onClick={() => setMode('upload')}
+            className={`flex-1 py-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+              mode === 'upload' ? 'bg-gray-50 text-black border-b-2 border-black' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <Upload size={16} />
+            画像をアップロード
+          </button>
+          <button 
+            onClick={() => setMode('generate')}
+            className={`flex-1 py-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+              mode === 'generate' ? 'bg-gray-50 text-black border-b-2 border-black' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <Sparkles size={16} />
+            AIで画像を生成
+          </button>
+        </div>
+
         <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Image Upload */}
-            <div>
-              <h3 className="text-sm font-bold text-gray-900 mb-4">商品画像</h3>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFile(file);
+          {mode === 'upload' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Image Upload */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 mb-4">商品画像</h3>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFile(file);
                 }}
               />
 
@@ -659,6 +782,158 @@ function AddProductView({
               </div>
             </div>
           </div>
+          ) : (
+            /* Generate Mode */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Generation Form */}
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">商品の説明 <span className="text-red-400">*</span></label>
+                  <textarea 
+                    value={genPrompt}
+                    onChange={(e) => setGenPrompt(e.target.value)}
+                    placeholder="例: 白いオーバーサイズTシャツ、コットン素材、シンプルなデザイン..." 
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none h-32 resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">スタイル・追加要素</label>
+                  <input 
+                    value={genStyle}
+                    onChange={(e) => setGenStyle(e.target.value)}
+                    placeholder="例: ミニマル、ヴィンテージ、モダン..." 
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                  />
+                </div>
+                <button
+                  onClick={handleGeneratePreview}
+                  disabled={isGenerating || !genPrompt.trim()}
+                  className={`w-full py-3 rounded-lg font-medium shadow-lg shadow-black/10 transition-all flex items-center justify-center gap-2 ${
+                    isGenerating || !genPrompt.trim()
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-black text-white hover:bg-gray-800'
+                  }`}
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={18} />
+                      プレビューを生成
+                    </>
+                  )}
+                </button>
+                {generateError && (
+                  <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+                    <p className="text-xs text-red-600">{generateError}</p>
+                  </div>
+                )}
+                
+                {/* Common form fields */}
+                <div className="border-t border-gray-200 pt-5 space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">キャンペーン <span className="text-red-400">*</span></label>
+                    <select
+                      value={campaignId}
+                      onChange={(e) => setCampaignId(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                    >
+                      <option value="">選択してください</option>
+                      {campaigns.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">商品名 <span className="text-red-400">*</span></label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="例: オーバーサイズTシャツ"
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">説明</label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="商品の説明を入力..."
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none h-24 resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                    >
+                      <option value="">選択してください</option>
+                      <option value="トップス">トップス</option>
+                      <option value="ボトムス">ボトムス</option>
+                      <option value="ワンピース">ワンピース</option>
+                      <option value="アウター">アウター</option>
+                      <option value="アクセサリー">アクセサリー</option>
+                      <option value="シューズ">シューズ</option>
+                      <option value="バッグ">バッグ</option>
+                      <option value="その他">その他</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">タグ (カンマ区切り)</label>
+                    <input
+                      type="text"
+                      value={tags}
+                      onChange={(e) => setTags(e.target.value)}
+                      placeholder="例: カジュアル, 夏物, コットン"
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview Area */}
+              <div className="bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-center min-h-[400px] overflow-hidden relative">
+                {isGenerating ? (
+                  <div className="text-center">
+                    <Loader2 className="w-10 h-10 text-gray-400 animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">AI商品画像を生成中...</p>
+                    <p className="text-xs text-gray-400 mt-1">30秒〜1分ほどかかります</p>
+                  </div>
+                ) : generatedPreview ? (
+                  <div className="relative w-full h-full min-h-[400px]">
+                    <Image
+                      src={generatedPreview}
+                      alt="生成された商品画像"
+                      fill
+                      className="object-contain rounded-xl"
+                      unoptimized
+                    />
+                    <button
+                      onClick={handleGeneratePreview}
+                      className="absolute bottom-3 right-3 px-3 py-1.5 bg-black/70 hover:bg-black text-white text-xs rounded-lg flex items-center gap-1.5 transition-colors"
+                    >
+                      <Sparkles size={12} />
+                      再生成
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-400">
+                    <div className="mx-auto w-16 h-16 mb-3 bg-gray-200 rounded-full flex items-center justify-center">
+                      <Package size={32} className="text-gray-300" />
+                    </div>
+                    <p className="text-sm">プレビューがここに表示されます</p>
+                    <p className="text-xs text-gray-400 mt-1">左の設定を入力して「プレビューを生成」を押してください</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="mt-6 p-3 bg-red-50 border border-red-100 rounded-lg">
@@ -677,9 +952,9 @@ function AddProductView({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={uploading || !uploadedFile || !name.trim() || !campaignId}
+            disabled={uploading || !name.trim() || !campaignId || (mode === 'upload' ? !uploadedFile : !generatedPreview)}
             className={`px-5 py-2.5 font-medium rounded-lg transition-colors shadow-lg shadow-black/10 flex items-center gap-2 ${
-              uploading || !uploadedFile || !name.trim() || !campaignId
+              uploading || !name.trim() || !campaignId || (mode === 'upload' ? !uploadedFile : !generatedPreview)
                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 : 'bg-black text-white hover:bg-gray-800'
             }`}

@@ -400,16 +400,27 @@ curl -X POST https://seisei.me/api/v1/models \\
             campaignName: 'Summer 2026',
         }, null, 2),
         responseExample: JSON.stringify({
-            success: true,
-            image_url: 'https://storage.seisei.me/generations/...',
-            generation_id: '770e8400-e29b-41d4-a716-446655440020',
-            generation_time: '15.2s',
-            credits_used: 1,
-            product_id: '550e8400-e29b-41d4-a716-446655440001',
-            model_id: '660e8400-e29b-41d4-a716-446655440010',
-            campaign_id: '550e8400-e29b-41d4-a716-446655440000',
+            task_id: '770e8400-e29b-41d4-a716-446655440020',
+            status: 'processing',
+            message: 'Editorial generation started. Use GET /api/v1/tasks/:taskId to check status.',
         }, null, 2),
-        curlExample: `# Full automation: create product + use existing model
+        curlExample: `# Start generation — returns immediately with task_id
+curl -X POST https://seisei.me/api/v1/generate/editorial \\
+  -H "Authorization: Bearer sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "outfitImage": "data:image/png;base64,...",
+    "modelId": "660e8400-e29b-41d4-a716-446655440010"
+  }'
+# → 202 { "task_id": "uuid", "status": "processing" }
+
+# Poll for result
+curl https://seisei.me/api/v1/tasks/uuid \\
+  -H "Authorization: Bearer sk_live_..."
+# → { "task_id": "uuid", "status": "completed", "result": { "image_url": "...", "generation_id": "..." } }
+# → { "task_id": "uuid", "status": "failed", "error": "..." }
+
+# Full automation example: create product + use existing model
 curl -X POST https://seisei.me/api/v1/generate/editorial \\
   -H "Authorization: Bearer sk_live_..." \\
   -H "Content-Type: application/json" \\
@@ -420,33 +431,49 @@ curl -X POST https://seisei.me/api/v1/generate/editorial \\
     "modelId": "660e8400-e29b-41d4-a716-446655440010",
     "background": "studio",
     "campaignName": "Spring 2026"
-  }'
-
-# Full automation: create both product and model
-curl -X POST https://seisei.me/api/v1/generate/editorial \\
-  -H "Authorization: Bearer sk_live_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "createProduct": true,
-    "productPrompt": "Navy linen shorts on white background, e-commerce photography",
-    "productName": "リネンショートパンツ",
-    "createModel": true,
-    "modelPrompt": "A 24-year-old Japanese female fashion model, natural makeup, studio portrait",
-    "modelName": "Sakura",
-    "sex": "female",
-    "background": "outdoor",
-    "campaignName": "Summer 2026"
-  }'
-
-# Use existing product and model
-curl -X POST https://seisei.me/api/v1/generate/editorial \\
-  -H "Authorization: Bearer sk_live_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "productId": "550e8400-e29b-41d4-a716-446655440001",
-    "modelId": "660e8400-e29b-41d4-a716-446655440010",
-    "background": "cafe"
   }'`,
+    },
+
+    // === Task Status (for polling editorial results) ===
+    {
+        method: 'GET',
+        path: '/api/v1/tasks/:taskId',
+        title: 'Get Task Status',
+        titleJa: 'タスクステータス取得',
+        description: 'Poll for the status and result of an editorial generation task. Returns processing, completed, or failed status.',
+        status: 'live',
+        icon: <Clock className="w-4 h-4" />,
+        auth: 'Bearer sk_live_...',
+        headers: {
+            'Authorization': 'Bearer sk_live_...',
+        },
+        responseExample: JSON.stringify({
+            task_id: '770e8400-e29b-41d4-a716-446655440020',
+            status: 'completed',
+            created_at: '2026-02-10T12:00:00.000Z',
+            updated_at: '2026-02-10T12:00:15.000Z',
+            result: {
+                image_url: 'https://storage.seisei.me/generations/...',
+                generation_id: '770e8400-e29b-41d4-a716-446655440020',
+                generation_time: '15.2s',
+                credits_used: 1,
+                product_id: '550e8400-e29b-41d4-a716-446655440001',
+                model_id: '660e8400-e29b-41d4-a716-446655440010',
+                campaign_id: '550e8400-e29b-41d4-a716-446655440000',
+            },
+        }, null, 2),
+        curlExample: `# Check task status
+curl https://seisei.me/api/v1/tasks/770e8400-e29b-41d4-a716-446655440020 \\
+  -H "Authorization: Bearer sk_live_..."
+
+# Response when processing:
+# { "task_id": "uuid", "status": "processing", "created_at": "...", "updated_at": "..." }
+
+# Response when completed:
+# { "task_id": "uuid", "status": "completed", "result": { "image_url": "...", "generation_id": "..." } }
+
+# Response when failed:
+# { "task_id": "uuid", "status": "failed", "error": "Error message" }`,
     },
 
     // === Campaigns ===

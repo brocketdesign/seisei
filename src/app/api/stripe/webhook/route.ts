@@ -53,6 +53,26 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    // Handle trial ending → upgrade free plan to starter
+    if (event.type === 'customer.subscription.updated') {
+        const subscription = event.data.object as Stripe.Subscription;
+
+        try {
+            // When a trial ends and the subscription becomes active (paid),
+            // upgrade the user's plan from "free" to "starter"
+            const previousAttributes = (event.data as Stripe.Event.Data & { previous_attributes?: Record<string, unknown> }).previous_attributes;
+            if (
+                subscription.status === 'active' &&
+                (previousAttributes?.status === 'trialing' ||
+                 (previousAttributes?.trial_end !== undefined && subscription.trial_end !== null && subscription.trial_end <= Math.floor(Date.now() / 1000)))
+            ) {
+                await handleTrialEnded(subscription);
+            }
+        } catch (error) {
+            console.error('Error handling subscription update:', error);
+        }
+    }
+
     return NextResponse.json({ received: true });
 }
 
@@ -197,6 +217,47 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
 
     console.log('[webhook] Checkout completed successfully for:', authData.user.id);
+}
+
+async function handleTrialEnded(subscription: Stripe.Subscription) {
+    const customerId = subscription.customer as string;
+
+    console.log('[webhook] Trial ended for customer:', customerId, '→ upgrading to starter');
+
+    // Find the user by their stripe_customer_id in auth metadata
+    const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+    const user = usersData?.users?.find(
+        u => u.user_metadata?.stripe_customer_id === customerId
+    );
+
+    if (!user) {
+        console.warn('[webhook] Could not find user for customer:', customerId);
+        return;
+    }
+
+    // Check current plan before updating
+    const { data: profile } = await supabaseAdmin.from('profiles')
+        .select('plan')
+        .eq('id', user.id)
+        .single();
+
+    if (profile?.plan && profile.plan !== 'free') {
+        console.warn('[webhook] User already on plan:', profile.plan, '— skipping trial upgrade for:', user.id);
+        return;
+    }
+
+    // Update plan from "free" to "starter"
+    const { error } = await supabaseAdmin.from('profiles').update({
+        plan: 'starter',
+        updated_at: new Date().toISOString(),
+    }).eq('id', user.id);
+
+    if (error) {
+        console.error('[webhook] Error upgrading trial user to starter:', error);
+        throw error;
+    }
+
+    console.log('[webhook] Trial ended, user upgraded to starter:', user.id);
 }
 
 async function updateUserProfile(userId: string, metadata: Record<string, string>) {
