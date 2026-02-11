@@ -23,11 +23,11 @@ import { createClient } from '@/utils/supabase/client';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'ダッシュボード' },
-  { href: '/dashboard/generate', icon: ImageIcon, label: '画像生成' },
-  { href: '/dashboard/video', icon: Video, label: '動画生成' },
+  { href: '/dashboard/campaigns', icon: Megaphone, label: 'キャンペーン' },
   { href: '/dashboard/models', icon: Users, label: 'モデル管理' },
   { href: '/dashboard/products', icon: Package, label: '商品管理' },
-  { href: '/dashboard/campaigns', icon: Megaphone, label: 'キャンペーン' },
+  { href: '/dashboard/generate', icon: ImageIcon, label: '画像生成' },
+  { href: '/dashboard/video', icon: Video, label: '動画生成' },
   { href: '/dashboard/social', icon: Share2, label: 'ソーシャル' },
   { href: '/dashboard/api-keys', icon: Key, label: 'API連携' },
   { href: '/dashboard/settings', icon: Settings, label: '設定' },
