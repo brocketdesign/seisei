@@ -258,6 +258,26 @@ async function processEditorialPipeline({ taskId, userId, body }: PipelineParams
         let createdProductId: string | null = null;
 
         if (createProduct) {
+            // Generate product inline
+            if (!productPrompt) {
+                return NextResponse.json(
+                    { error: 'productPrompt is required when createProduct is true.' },
+                    { status: 400 },
+                );
+            }
+            if (!productName) {
+                return NextResponse.json(
+                    { error: 'productName is required when createProduct is true.' },
+                    { status: 400 },
+                );
+            }
+            if (!resolvedCampaignId) {
+                return NextResponse.json(
+                    { error: 'campaignId or campaignName is required when createProduct is true.' },
+                    { status: 400 },
+                );
+            }
+
             const productResult = await segmind.generateImage({
                 prompt: productPrompt!.trim(),
                 negative_prompt: 'person, model, mannequin, low quality, blurry, deformed',
