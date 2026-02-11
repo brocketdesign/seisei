@@ -25,6 +25,7 @@ export interface Database {
                     plan: string | null
                     billing_interval: string | null
                     notification_preferences: Record<string, boolean> | null
+                    role: string | null
                     created_at: string
                     updated_at: string
                 }
@@ -43,6 +44,7 @@ export interface Database {
                     plan?: string | null
                     billing_interval?: string | null
                     notification_preferences?: Record<string, boolean> | null
+                    role?: string | null
                     created_at?: string
                     updated_at?: string
                 }
@@ -61,6 +63,7 @@ export interface Database {
                     plan?: string | null
                     billing_interval?: string | null
                     notification_preferences?: Record<string, boolean> | null
+                    role?: string | null
                     created_at?: string
                     updated_at?: string
                 }
