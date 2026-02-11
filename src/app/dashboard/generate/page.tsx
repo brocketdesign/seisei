@@ -123,7 +123,9 @@ export default function GeneratePage() {
 
   // Generation settings
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const selectedModel = activeModels.find(m => m.id === selectedModelId) ?? activeModels[0] ?? null;
+  const selectedModel = selectedModelId
+    ? activeModels.find(m => m.id === selectedModelId) ?? null
+    : activeModels[0] ?? null;
   const [background, setBackground] = useState('スタジオ（白背景）');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [faceSwapOnly, setFaceSwapOnly] = useState(false);
@@ -354,6 +356,11 @@ export default function GeneratePage() {
     const hasImage = selectedProduct || uploadedFile;
     if (!hasImage) {
       setGenerationError('商品を選択するか、画像をアップロードしてください。');
+      return;
+    }
+
+    if (!selectedModel) {
+      setGenerationError('モデルを選択してください。');
       return;
     }
 
