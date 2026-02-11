@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Megaphone,
@@ -75,15 +75,19 @@ const WIZARD_STEPS: WizardStep[] = [
   },
 ];
 
-const STORAGE_KEY = "seisei_wizard_completed";
+const STORAGE_KEY = "seisei_dashboard_wizard_completed";
 
-function getInitialVisibility(): boolean {
-  if (typeof window === "undefined") return false;
+const subscribe = () => () => {};
+function getClientSnapshot() {
   return !localStorage.getItem(STORAGE_KEY);
+}
+function getServerSnapshot() {
+  return false;
 }
 
 export default function WelcomeWizard() {
-  const [visible, setVisible] = useState(getInitialVisibility);
+  const shouldShow = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
+  const [visible, setVisible] = useState(true);
   const [currentStep, setCurrentStep] = useState(-1); // -1 = welcome screen
   const [direction, setDirection] = useState(1);
 
@@ -110,7 +114,7 @@ export default function WelcomeWizard() {
     handleComplete();
   }, [handleComplete]);
 
-  if (!visible) return null;
+  if (!shouldShow || !visible) return null;
 
   const totalSteps = WIZARD_STEPS.length;
   const isWelcome = currentStep === -1;
