@@ -263,7 +263,7 @@ function OnboardingContent() {
       recommended: true,
       features: [
         { text: '3日間無料トライアル', included: true },
-        { text: '月50枚画像生成', included: true },
+        { text: '月10枚画像生成', included: true },
         { text: '標準画質', included: true },
         { text: 'メールサポート', included: true },
         { text: '動画生成', included: false },
