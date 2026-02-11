@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import WelcomeWizard from './components/WelcomeWizard';
 
 type Generation = {
   id: string;
@@ -171,6 +172,8 @@ export default function Dashboard() {
 
   return (
     <>
+      <WelcomeWizard />
+
       <header className="mb-6">
         <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">ダッシュボード</h2>
         <p className="text-gray-400 text-sm mt-1">クリエイティブスタジオの概要</p>
