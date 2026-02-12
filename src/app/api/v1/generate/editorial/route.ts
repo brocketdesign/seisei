@@ -110,6 +110,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        if (createProduct && !campaignId && !campaignName) {
+            return NextResponse.json(
+                { error: 'campaignId or campaignName is required when createProduct is true.' },
+                { status: 400 },
+            );
+        }
+
         // ── Create task record and return immediately ───────────────
         const { data: task, error: taskError } = await adminClient
             .from('editorial_tasks')
@@ -260,22 +267,13 @@ async function processEditorialPipeline({ taskId, userId, body }: PipelineParams
         if (createProduct) {
             // Generate product inline
             if (!productPrompt) {
-                return NextResponse.json(
-                    { error: 'productPrompt is required when createProduct is true.' },
-                    { status: 400 },
-                );
+                throw new Error('productPrompt is required when createProduct is true.');
             }
             if (!productName) {
-                return NextResponse.json(
-                    { error: 'productName is required when createProduct is true.' },
-                    { status: 400 },
-                );
+                throw new Error('productName is required when createProduct is true.');
             }
             if (!resolvedCampaignId) {
-                return NextResponse.json(
-                    { error: 'campaignId or campaignName is required when createProduct is true.' },
-                    { status: 400 },
-                );
+                throw new Error('campaignId or campaignName is required when createProduct is true.');
             }
 
             const productResult = await segmind.generateImage({
@@ -399,15 +397,16 @@ async function processEditorialPipeline({ taskId, userId, body }: PipelineParams
                 .eq('user_id', userId)
                 .single();
 
-            if (dbModel) {
-                resolvedModelData = {
-                    id: dbModel.id,
-                    name: dbModel.name,
-                    avatar: dbModel.thumbnail_url,
-                    ...dbModel.model_data,
-                };
-                resolvedModelId = dbModel.id;
+            if (!dbModel) {
+                throw new Error(`Model not found: ${modelId}`);
             }
+            resolvedModelData = {
+                id: dbModel.id,
+                name: dbModel.name,
+                avatar: dbModel.thumbnail_url,
+                ...dbModel.model_data,
+            };
+            resolvedModelId = dbModel.id;
         }
 
         if (resolvedModelData?.id) {
