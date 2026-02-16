@@ -438,24 +438,44 @@ export default function VideoPage() {
                   <p className="text-xs text-gray-300">まず画像生成ダッシュボードで画像を生成してください</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 max-h-64 overflow-y-auto pr-1">
-                  {generations.map(g => (
-                    <button
-                      key={g.id}
-                      onClick={() => setSelectedImage(g)}
-                      className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                        selectedImage?.id === g.id ? 'border-black ring-2 ring-black/20' : 'border-transparent hover:border-gray-300'
-                      }`}
-                    >
-                      <Image src={g.result_url} alt="" fill className="object-cover" sizes="120px" />
-                      {selectedImage?.id === g.id && (
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                          <CheckCircle2 className="w-6 h-6 text-white" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  {/* Fixed height scrollable container with grid */}
+                  <div className="h-[420px] overflow-y-auto pr-2 -mr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {generations.map(g => (
+                        <button
+                          key={g.id}
+                          onClick={() => setSelectedImage(g)}
+                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all group ${
+                            selectedImage?.id === g.id 
+                              ? 'border-black ring-2 ring-black/20 shadow-lg' 
+                              : 'border-gray-200 hover:border-gray-400 hover:shadow-md'
+                          }`}
+                        >
+                          <Image 
+                            src={g.result_url} 
+                            alt="" 
+                            fill 
+                            className="object-cover transition-transform duration-300 group-hover:scale-105" 
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" 
+                          />
+                          {selectedImage?.id === g.id && (
+                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center backdrop-blur-[2px]">
+                              <div className="bg-black rounded-full p-1.5">
+                                <CheckCircle2 className="w-5 h-5 text-white" />
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Image count indicator */}
+                  <div className="mt-3 text-right text-xs text-gray-400">
+                    {generations.length}件の画像
+                  </div>
+                </>
               )}
             </div>
 
