@@ -278,7 +278,7 @@ curl -X POST https://seisei.me/api/v1/models \\
         path: '/api/v1/generate/virtual-tryon',
         title: 'Virtual Try-On',
         titleJa: 'バーチャル試着',
-        description: 'Takes a product/outfit image and a model image, generates the model wearing the outfit using SegFit v1.3.',
+        description: 'Takes a product/outfit image and a model image, generates the model wearing the outfit using Flux-2 Klein-9b.',
         status: 'live',
         icon: <ImageIcon className="w-4 h-4" />,
         auth: 'Bearer sk_live_...',

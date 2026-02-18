@@ -357,7 +357,7 @@ export default function Home() {
 
             {/* Floating tech badges */}
             <motion.div {...fadeUp(1.1)} className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-6 sm:mt-8">
-              {['SegFit v1.3', 'Z-Image Turbo', 'FaceSwap v5'].map((tech) => (
+              {['Flux-2 Klein', 'Z-Image Turbo', 'FaceSwap v5'].map((tech) => (
                 <span key={tech} className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-100 text-[9px] sm:text-[10px] font-semibold text-gray-400 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   {tech}

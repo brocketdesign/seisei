@@ -61,11 +61,11 @@ export async function POST(request: NextRequest) {
             ? await uploadImageToStorage(modelImage, 'models')
             : modelImage;
 
-        // Run virtual try-on via Segmind SegFit v1.3
+        // Run virtual try-on via Segmind Flux-2 Klein-9b
         const segmind = createSegmindClient();
         const result = await segmind.virtualTryOn({
-            outfit_image: outfitUrl,
-            model_image: modelUrl,
+            prompt: 'Make the person in image 1 wear the outfit from image 2. Photorealistic, high quality fashion photography.',
+            image_urls: [modelUrl, outfitUrl],
         });
 
         // Upload generated image

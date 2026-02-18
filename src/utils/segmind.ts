@@ -2,24 +2,25 @@
  * Segmind API Client
  * 
  * Models:
- * - segfit-v1.3: Virtual try-on for clothes
+ * - flux-2-klein-9b: Virtual try-on / image-to-image transformation
  * - z-image-turbo: Fast photorealistic image generation
  * - faceswap-v5: Face/head swapping
  */
 
 const SEGMIND_API_URL = 'https://api.segmind.com/v1';
 
-interface SegfitRequest {
-    outfit_image: string; // URL of clothing/outfit image
-    model_image: string;  // URL of model/person image
-    mask_image?: string;
-    model_type?: 'Quality' | 'Speed';
-    cn_strength?: number; // 0-1, default 0.8
-    cn_end?: number;      // 0-1, default 0.5
+interface Flux2KleinRequest {
+    prompt: string;              // Text description of the transformation
+    image_urls?: string[];       // Array of input image URLs (model first, outfit second)
+    negative_prompt?: string;    // default: "low quality, blurry, less details"
+    seed?: number;               // default: 3425234
+    cfg?: number;                // default: 5, range 1-20
+    sampler?: string;            // default: "euler"
+    steps?: number;              // default: 20, range 1-100
+    aspect_ratio?: string;       // default: "1:1"
+    go_fast?: boolean;           // default: true
     image_format?: 'png' | 'jpeg' | 'webp';
-    image_quality?: number; // 1-100, default 90
-    seed?: number;
-    base64?: boolean;
+    quality?: number;            // default: 90, range 10-100
 }
 
 interface ZImageTurboRequest {
@@ -163,21 +164,22 @@ class SegmindClient {
     }
 
     /**
-     * Virtual try-on using SegFit v1.3
-     * Put clothing on a model/person image
+     * Virtual try-on using Flux-2 Klein-9b
+     * Put clothing on a model/person image via prompt + image URLs
      */
-    async virtualTryOn(params: SegfitRequest): Promise<SegmindResponse> {
-        return this.request('segfit-v1.3', {
-            outfit_image: params.outfit_image,
-            model_image: params.model_image,
-            ...(params.mask_image && { mask_image: params.mask_image }),
-            model_type: params.model_type || 'Quality',
-            cn_strength: params.cn_strength ?? 0.8,
-            cn_end: params.cn_end ?? 0.5,
+    async virtualTryOn(params: Flux2KleinRequest): Promise<SegmindResponse> {
+        return this.request('flux-2-klein-9b', {
+            prompt: params.prompt,
+            ...(params.image_urls && { image_urls: params.image_urls }),
+            negative_prompt: params.negative_prompt ?? 'low quality, blurry, less details',
+            seed: params.seed ?? 3425234,
+            cfg: params.cfg ?? 5,
+            sampler: params.sampler ?? 'euler',
+            steps: params.steps ?? 20,
+            aspect_ratio: params.aspect_ratio ?? '1:1',
+            go_fast: params.go_fast ?? true,
             image_format: params.image_format ?? 'png',
-            image_quality: params.image_quality ?? 90,
-            seed: params.seed ?? 42,
-            base64: params.base64 ?? false,
+            quality: params.quality ?? 90,
         });
     }
 
@@ -236,4 +238,4 @@ export function createSegmindClient(apiKey?: string): SegmindClient {
     return new SegmindClient(key);
 }
 
-export type { SegfitRequest, ZImageTurboRequest, FaceswapRequest, KlingImageToVideoRequest, SegmindResponse };
+export type { Flux2KleinRequest, ZImageTurboRequest, FaceswapRequest, KlingImageToVideoRequest, SegmindResponse };

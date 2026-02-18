@@ -605,7 +605,7 @@ export default function DemoPage() {
             transition={{ duration: 0.5, delay: 0.3, ease }}
             className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 mt-8 sm:mt-12"
           >
-            {["SegFit v1.3", "Z-Image Turbo", "FaceSwap v5", "Video Gen v2"].map((tech) => (
+            {["Flux-2 Klein", "Z-Image Turbo", "FaceSwap v5", "Video Gen v2"].map((tech) => (
               <span
                 key={tech}
                 className="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-100 text-[9px] sm:text-[10px] font-semibold text-gray-400 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full"

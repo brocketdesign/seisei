@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
                     //   1. Generate model image (Z-Image Turbo)
                     //   2. Upload model image → get URL
                     //   3. Face swap reference face onto generated model (Faceswap v5)
-                    //   4. Virtual try-on outfit onto face-swapped model (SegFit v1.3)
+                    //   4. Virtual try-on outfit onto face-swapped model (Flux-2 Klein-9b)
                     // ============================================================
 
                     if (!outfitImage) {
@@ -195,19 +195,16 @@ export async function POST(request: NextRequest) {
                         await sendEvent('step', { step: 3, total: 4, message: 'フェイススワップをスキップ（参照画像なし）' });
                     }
 
-                    // ── Step 4: Virtual try-on (SegFit) ──
+                    // ── Step 4: Virtual try-on (Flux-2 Klein-9b) ──
                     await sendEvent('step', { step: 4, total: 4, message: '衣装を合成中...' });
 
                     result = await segmind.virtualTryOn({
-                        outfit_image: outfitUrl,
-                        model_image: faceSwappedModelUrl,
-                        model_type: 'Quality',
-                        cn_strength: 0.8,
-                        cn_end: 0.5,
+                        prompt: 'Make the person in image 1 wear the outfit from image 2. Photorealistic, high quality fashion photography.',
+                        image_urls: [faceSwappedModelUrl, outfitUrl],
                         image_format: 'png',
-                        image_quality: 95,
-                        seed: 42,
-                        base64: false,
+                        quality: 95,
+                        steps: 20,
+                        cfg: 5,
                     });
                     break;
                 }
@@ -227,8 +224,8 @@ export async function POST(request: NextRequest) {
                         ]);
                         await sendEvent('step', { step: 2, total: 2, message: '衣装を合成中...' });
                         result = await segmind.virtualTryOn({
-                            model_image: tryonModelUrl,
-                            outfit_image: tryonOutfitUrl,
+                            prompt: 'Make the person in image 1 wear the outfit from image 2. Photorealistic, high quality fashion photography.',
+                            image_urls: [tryonModelUrl, tryonOutfitUrl],
                         });
                     }
                     break;

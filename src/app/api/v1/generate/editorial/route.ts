@@ -525,17 +525,14 @@ async function processEditorialPipeline({ taskId, userId, body }: PipelineParams
             }
         }
 
-        // ── Step 4: Virtual try-on ──────────────────────────────────
+        // ── Step 4: Virtual try-on (Flux-2 Klein-9b) ────────────────────────────────
         const result = await segmind.virtualTryOn({
-            outfit_image: outfitUrl,
-            model_image: faceSwappedModelUrl,
-            model_type: 'Quality',
-            cn_strength: 0.8,
-            cn_end: 0.5,
+            prompt: 'Make the person in image 1 wear the outfit from image 2. Photorealistic, high quality fashion photography.',
+            image_urls: [faceSwappedModelUrl, outfitUrl],
             image_format: 'png',
-            image_quality: 95,
-            seed: 42,
-            base64: false,
+            quality: 95,
+            steps: 20,
+            cfg: 5,
         });
 
         // Upload generated image
