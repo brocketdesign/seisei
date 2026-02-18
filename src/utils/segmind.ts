@@ -99,11 +99,45 @@ class SegmindClient {
             throw new Error(`Segmind API error: ${response.status} - ${error}`);
         }
 
-        // The API returns the image directly as binary
+        const contentType = response.headers.get('content-type') || '';
+
+        // Handle JSON responses (API may return base64 or URL in JSON)
+        if (contentType.includes('application/json')) {
+            const json = await response.json();
+
+            // Extract image from common JSON field names
+            const rawImage = json.image ?? json.data ?? json.output ?? null;
+            const imageUrl = json.image_url ?? json.url ?? json.output_url ?? null;
+
+            if (typeof rawImage === 'string' && rawImage.length > 0) {
+                // Already a full data URI
+                if (rawImage.startsWith('data:')) {
+                    return { image: rawImage };
+                }
+                // Raw base64 string — wrap in a data URI
+                return { image: `data:image/png;base64,${sanitizeBase64(rawImage)}` };
+            }
+
+            if (typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
+                // API returned a URL — fetch the actual image
+                const imgResponse = await fetch(imageUrl);
+                const imgBuffer = await imgResponse.arrayBuffer();
+                const imgMime = imgResponse.headers.get('content-type')?.split(';')[0].trim() || 'image/png';
+                const imgBase64 = Buffer.from(imgBuffer).toString('base64');
+                return { image: `data:${imgMime};base64,${imgBase64}` };
+            }
+
+            throw new Error(
+                `Segmind API returned unexpected JSON response for ${model}: ${JSON.stringify(json).slice(0, 300)}`
+            );
+        }
+
+        // Binary response — detect MIME type from Content-Type header
+        const mimeType = contentType.startsWith('image/') ? contentType.split(';')[0].trim() : 'image/png';
         const arrayBuffer = await response.arrayBuffer();
         const base64 = Buffer.from(arrayBuffer).toString('base64');
 
-        return { image: `data:image/png;base64,${base64}` };
+        return { image: `data:${mimeType};base64,${base64}` };
     }
 
     /**

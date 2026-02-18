@@ -480,7 +480,7 @@ export default function GeneratePage() {
               if ((data.total as number) > 0) setTotalSteps(data.total as number);
               setGenerationStep(data.message as string);
             } else if (currentEvent === 'complete') {
-              resultImage = data.image as string;
+              resultImage = ((data.imageUrl || data.image) as string) || null;
               setGeneratedImage(resultImage);
               const historyImage = (data.imageUrl || data.image) as string;
               const gen = data.generation as { id?: string } | null;
