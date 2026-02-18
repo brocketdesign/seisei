@@ -31,11 +31,21 @@ type Product = {
   description: string | null;
   image_url: string;
   category: string | null;
+  product_type: 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory';
   tags: string[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 };
+
+const PRODUCT_TYPE_OPTIONS = [
+  { value: 'top', label: 'トップス (Top)' },
+  { value: 'bottom', label: 'ボトムス (Bottom)' },
+  { value: 'dress', label: 'ドレス・ワンピース (Dress)' },
+  { value: 'outerwear', label: 'アウター (Outerwear)' },
+  { value: 'shoes', label: 'シューズ (Shoes)' },
+  { value: 'accessory', label: 'アクセサリー (Accessory)' },
+] as const;
 
 type Campaign = {
   id: string;
@@ -438,6 +448,7 @@ function AddProductView({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [productType, setProductType] = useState<string>('top');
   const [tags, setTags] = useState('');
   const [campaignId, setCampaignId] = useState(selectedCampaignId || '');
   const [error, setError] = useState<string | null>(null);
@@ -611,6 +622,7 @@ function AddProductView({
           imageData,
           description: description.trim() || null,
           category: category.trim() || null,
+          productType: productType || 'top',
           tags: tags.trim() ? tags.split(',').map(t => t.trim()).filter(Boolean) : null,
         }),
       });
@@ -771,6 +783,19 @@ function AddProductView({
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">商品タイプ <span className="text-red-400">*</span></label>
+                <select
+                  value={productType}
+                  onChange={(e) => setProductType(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                >
+                  {PRODUCT_TYPE_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">AI画像生成エンジンで正確な着用画像を生成するために使用されます</p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">タグ (カンマ区切り)</label>
                 <input
                   type="text"
@@ -883,6 +908,19 @@ function AddProductView({
                       <option value="バッグ">バッグ</option>
                       <option value="その他">その他</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">商品タイプ <span className="text-red-400">*</span></label>
+                    <select
+                      value={productType}
+                      onChange={(e) => setProductType(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
+                    >
+                      {PRODUCT_TYPE_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-400 mt-1">AI画像生成エンジンで正確な着用画像を生成するために使用されます</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">タグ (カンマ区切り)</label>
@@ -1053,6 +1091,20 @@ function ProductDetailsView({
                 <option value="バッグ">バッグ</option>
                 <option value="その他">その他</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-1">商品タイプ</label>
+              <select
+                value={formData.product_type || 'top'}
+                onChange={(e) => setFormData({ ...formData, product_type: e.target.value as Product['product_type'] })}
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black/10 outline-none"
+              >
+                {PRODUCT_TYPE_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-gray-400 mt-1">AI画像生成エンジンで正確な着用画像を生成するために使用されます</p>
             </div>
 
             <div>

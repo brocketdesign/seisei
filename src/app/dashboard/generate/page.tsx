@@ -15,7 +15,7 @@ import {
   X,
   Loader2,
   Package,
-  RefreshCw,
+  MessageSquare,
 } from 'lucide-react';
 
 import { createClient } from '@/utils/supabase/client';
@@ -34,6 +34,7 @@ type Product = {
   description: string | null;
   image_url: string;
   category: string | null;
+  product_type: 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory';
   tags: string[] | null;
   is_active: boolean;
 };
@@ -44,48 +45,6 @@ function fileToBase64(file: File): Promise<string> {
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Compare two images by drawing them onto small canvases and diffing pixels.
- * Returns a similarity score between 0 (completely different) and 1 (identical).
- */
-function compareImages(src1: string, src2: string): Promise<number> {
-  return new Promise((resolve) => {
-    const img1 = new window.Image();
-    const img2 = new window.Image();
-    let loaded = 0;
-
-    const onLoad = () => {
-      if (++loaded < 2) return;
-      const size = 64;
-      const c1 = document.createElement('canvas');
-      const c2 = document.createElement('canvas');
-      c1.width = c2.width = size;
-      c1.height = c2.height = size;
-      const ctx1 = c1.getContext('2d')!;
-      const ctx2 = c2.getContext('2d')!;
-      ctx1.drawImage(img1, 0, 0, size, size);
-      ctx2.drawImage(img2, 0, 0, size, size);
-      const d1 = ctx1.getImageData(0, 0, size, size).data;
-      const d2 = ctx2.getImageData(0, 0, size, size).data;
-      let diff = 0;
-      for (let i = 0; i < d1.length; i += 4) {
-        diff += Math.abs(d1[i] - d2[i]);
-        diff += Math.abs(d1[i + 1] - d2[i + 1]);
-        diff += Math.abs(d1[i + 2] - d2[i + 2]);
-      }
-      resolve(1 - diff / (size * size * 3 * 255));
-    };
-
-    const onError = () => resolve(-1);
-    img1.onload = onLoad;
-    img2.onload = onLoad;
-    img1.onerror = onError;
-    img2.onerror = onError;
-    img1.src = src1;
-    img2.src = src2;
   });
 }
 
@@ -100,15 +59,17 @@ export default function GeneratePage() {
 
   // Products state (from Supabase, filtered by campaign)
   const [products, setProducts] = useState<Product[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
 
   // Quick-add product state
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickAddName, setQuickAddName] = useState('');
+  const [quickAddProductType, setQuickAddProductType] = useState<Product['product_type']>('top');
   const [quickAddFile, setQuickAddFile] = useState<File | null>(null);
   const [quickAddPreview, setQuickAddPreview] = useState<string | null>(null);
   const [quickAddUploading, setQuickAddUploading] = useState(false);
+  const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const quickAddFileRef = useRef<HTMLInputElement>(null);
 
   // Upload state (manual upload for generation, used when no product is selected)
@@ -128,7 +89,7 @@ export default function GeneratePage() {
     : activeModels[0] ?? null;
   const [background, setBackground] = useState('スタジオ（白背景）');
   const [aspectRatio, setAspectRatio] = useState('1:1');
-  const [faceSwapOnly, setFaceSwapOnly] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -136,8 +97,7 @@ export default function GeneratePage() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationStep, setGenerationStep] = useState<string>('');
   const [currentStepNum, setCurrentStepNum] = useState(0);
-  const [totalSteps, setTotalSteps] = useState(4);
-  const [faceSwapWarning, setFaceSwapWarning] = useState(false);
+  const [totalSteps, setTotalSteps] = useState(2);
 
   // History — each entry has imageUrl (storage URL) and displayImage (base64 for current session or URL)
   const [history, setHistory] = useState<{ id?: string; image: string; createdAt?: string }[]>([]);
@@ -228,7 +188,7 @@ export default function GeneratePage() {
   useEffect(() => {
     if (!selectedCampaign) {
       setProducts([]);
-      setSelectedProductId(null);
+      setSelectedProductIds([]);
       return;
     }
 
@@ -236,14 +196,14 @@ export default function GeneratePage() {
       setProductsLoading(true);
       const { data } = await supabase
         .from('products')
-        .select('id, campaign_id, name, description, image_url, category, tags, is_active')
+        .select('id, campaign_id, name, description, image_url, category, product_type, tags, is_active')
         .eq('campaign_id', selectedCampaign.id)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       const productsList = data || [];
       setProducts(productsList);
-      setSelectedProductId(productsList[0]?.id ?? null);
+      setSelectedProductIds([]);
 
       // Clear manual upload when switching campaigns
       removeUpload();
@@ -252,8 +212,8 @@ export default function GeneratePage() {
     fetchProducts();
   }, [selectedCampaign?.id]);
 
-  // Derive selected product
-  const selectedProduct = products.find(p => p.id === selectedProductId) ?? null;
+  // Derive selected products
+  const selectedProducts = products.filter(p => selectedProductIds.includes(p.id));
 
   // --- File Upload Handlers (manual upload fallback) ---
   const handleFile = useCallback(async (file: File) => {
@@ -267,7 +227,7 @@ export default function GeneratePage() {
     }
     setGenerationError(null);
     setUploadedFile(file);
-    setSelectedProductId(null); // Deselect product when manually uploading
+    setSelectedProductIds([]); // Deselect products when manually uploading
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
   }, []);
@@ -301,9 +261,14 @@ export default function GeneratePage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [previewUrl]);
 
-  // When selecting a product, clear the manual upload
+  // When selecting a product, toggle multi-selection
   const handleSelectProduct = (productId: string) => {
-    setSelectedProductId(productId);
+    setSelectedProductIds(prev => {
+      if (prev.includes(productId)) {
+        return prev.filter(id => id !== productId);
+      }
+      return [...prev, productId];
+    });
     removeUpload();
   };
 
@@ -312,6 +277,7 @@ export default function GeneratePage() {
     if (!file.type.startsWith('image/')) return;
     setQuickAddFile(file);
     setQuickAddPreview(URL.createObjectURL(file));
+    setQuickAddError(null);
   };
 
   const handleQuickAddSubmit = async () => {
@@ -329,6 +295,7 @@ export default function GeneratePage() {
           name: quickAddName.trim(),
           campaignId: selectedCampaign.id,
           imageData,
+          productType: quickAddProductType,
         }),
       });
 
@@ -336,15 +303,19 @@ export default function GeneratePage() {
       if (!response.ok) throw new Error(result.error || '商品の追加に失敗しました。');
 
       const product = result.product;
+      // Add product to the top of the list and auto-select it
       setProducts(prev => [product, ...prev]);
-      setSelectedProductId(product.id);
+      setSelectedProductIds(prev => [...prev, product.id]);
+      // Close and reset the form
       setShowQuickAdd(false);
       setQuickAddName('');
+      setQuickAddProductType('top');
+      setQuickAddError(null);
       setQuickAddFile(null);
       if (quickAddPreview) URL.revokeObjectURL(quickAddPreview);
       setQuickAddPreview(null);
-    } catch {
-      setGenerationError('商品の追加に失敗しました。');
+    } catch (err) {
+      setQuickAddError(err instanceof Error ? err.message : '商品の追加に失敗しました。');
     } finally {
       setQuickAddUploading(false);
     }
@@ -352,8 +323,8 @@ export default function GeneratePage() {
 
   // --- Generation ---
   const handleGenerate = async () => {
-    // Need either a selected product or a manually uploaded file
-    const hasImage = selectedProduct || uploadedFile;
+    // Need either selected products or a manually uploaded file
+    const hasImage = selectedProducts.length > 0 || uploadedFile;
     if (!hasImage) {
       setGenerationError('商品を選択するか、画像をアップロードしてください。');
       return;
@@ -369,65 +340,49 @@ export default function GeneratePage() {
     setGeneratedImage(null);
     setGenerationStep('準備中...');
     setCurrentStepNum(0);
-    setTotalSteps(4);
-    setFaceSwapWarning(false);
+    setTotalSteps(2);
 
     try {
-      let outfitImage: string;
+      // Build the products array for the API (with product types)
+      const productPayloads: { imageUrl: string; productType: string; name?: string }[] = [];
 
-      if (selectedProduct) {
-        // Fetch the product image and convert to base64
-        const response = await fetch(selectedProduct.image_url);
-        const blob = await response.blob();
-        const file = new File([blob], 'product.jpg', { type: blob.type });
-        outfitImage = await fileToBase64(file);
-      } else {
-        outfitImage = await fileToBase64(uploadedFile!);
+      if (selectedProducts.length > 0) {
+        for (const product of selectedProducts) {
+          productPayloads.push({
+            imageUrl: product.image_url,
+            productType: product.product_type || 'top',
+            name: product.name,
+          });
+        }
+      } else if (uploadedFile) {
+        const outfitImage = await fileToBase64(uploadedFile);
+        productPayloads.push({
+          imageUrl: outfitImage,
+          productType: 'top',
+        });
       }
 
       // The avatar URL is already a public Supabase Storage URL from the DB
       const modelAvatarUrl = selectedModel?.avatar || undefined;
 
-      if (faceSwapOnly) {
-        // Face swap only mode: use the product/uploaded image as target,
-        // and the model's avatar as the source face
-        if (!modelAvatarUrl) {
-          throw new Error('フェイススワップにはモデルの顔画像が必要です。モデルを選択してください。');
-        }
-        setGenerationStep('フェイススワップ処理中...');
-        setTotalSteps(2);
-      } else {
-        setGenerationStep('AIモデル画像を生成中...');
-        setTotalSteps(4);
-      }
-
-      const requestBody = faceSwapOnly
-        ? {
-            mode: 'faceswap',
-            sourceImage: modelAvatarUrl,  // the face to put (model avatar, already a URL so we pass it as-is)
-            targetImage: outfitImage,     // the image to swap the face onto (product/uploaded image)
-            campaignId: selectedCampaign?.id,
-            background,
-            aspectRatio,
-            modelData: selectedModel ? { id: selectedModel.id } : undefined,
-          }
-        : {
-            mode: 'full-pipeline',
-            outfitImage,
-            modelData: selectedModel ? {
-              id: selectedModel.id,
-              name: selectedModel.name,
-              age: selectedModel.age,
-              ethnicity: selectedModel.ethnicity,
-              bodyType: selectedModel.bodyType,
-              tags: selectedModel.tags,
-              avatar: modelAvatarUrl,
-              sex: selectedModel.sex,
-            } : undefined,
-            background,
-            aspectRatio,
-            campaignId: selectedCampaign?.id,
-          };
+      const requestBody = {
+        mode: 'seedream',
+        products: productPayloads,
+        customPrompt: customPrompt.trim() || undefined,
+        modelData: selectedModel ? {
+          id: selectedModel.id,
+          name: selectedModel.name,
+          age: selectedModel.age,
+          ethnicity: selectedModel.ethnicity,
+          bodyType: selectedModel.bodyType,
+          tags: selectedModel.tags,
+          avatar: modelAvatarUrl,
+          sex: selectedModel.sex,
+        } : undefined,
+        background,
+        aspectRatio,
+        campaignId: selectedCampaign?.id,
+      };
 
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -495,13 +450,7 @@ export default function GeneratePage() {
         }
       }
 
-      // After faceswap, compare original and result to detect if the swap actually happened
-      if (faceSwapOnly && resultImage) {
-        const similarity = await compareImages(outfitImage, resultImage);
-        if (similarity > 0.97) {
-          setFaceSwapWarning(true);
-        }
-      }
+      // After the stream ends, processing is complete
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : '生成に失敗しました。');
       setGenerationStep('');
@@ -518,7 +467,7 @@ export default function GeneratePage() {
     a.click();
   };
 
-  const hasImageSource = !!(selectedProduct || uploadedFile);
+  const hasImageSource = !!(selectedProducts.length > 0 || uploadedFile);
 
   return (
     <>
@@ -617,7 +566,7 @@ export default function GeneratePage() {
                 <Package className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                 <p className="text-xs text-gray-400 mb-3">この キャンペーンに商品がありません</p>
                 <button
-                  onClick={() => setShowQuickAdd(true)}
+                  onClick={() => { setShowQuickAdd(true); setQuickAddError(null); }}
                   className="text-xs bg-black text-white px-3 py-1.5 rounded-lg font-medium hover:bg-gray-800 transition-colors"
                 >
                   商品を追加
@@ -625,13 +574,24 @@ export default function GeneratePage() {
               </div>
             ) : (
               <>
+                <p className="text-[10px] text-gray-400 mb-2">複数の商品を選択できます（トップス、ボトムス、アクセサリーなど）</p>
                 <div className="grid grid-cols-2 gap-3">
-                  {products.map((product) => (
+                  {products.map((product) => {
+                    const isSelected = selectedProductIds.includes(product.id);
+                    const typeLabels: Record<string, string> = {
+                      top: 'トップス',
+                      bottom: 'ボトムス',
+                      dress: 'ドレス',
+                      outerwear: 'アウター',
+                      shoes: 'シューズ',
+                      accessory: 'アクセサリー',
+                    };
+                    return (
                     <button
                       key={product.id}
                       onClick={() => handleSelectProduct(product.id)}
                       className={`aspect-square rounded-lg border transition-all overflow-hidden relative group ${
-                        selectedProductId === product.id
+                        isSelected
                           ? 'border-black ring-2 ring-black/10'
                           : 'border-gray-100 hover:border-black'
                       }`}
@@ -645,11 +605,9 @@ export default function GeneratePage() {
                       />
                       <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
                         <span className="text-[11px] text-white font-medium block truncate">{product.name}</span>
-                        {product.category && (
-                          <span className="text-[9px] text-white/70">{product.category}</span>
-                        )}
+                        <span className="text-[9px] text-white/70">{typeLabels[product.product_type] || product.category || ''}</span>
                       </div>
-                      {selectedProductId === product.id && (
+                      {isSelected && (
                         <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-black rounded-full flex items-center justify-center">
                           <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -657,10 +615,11 @@ export default function GeneratePage() {
                         </div>
                       )}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 <button
-                  onClick={() => setShowQuickAdd(true)}
+                  onClick={() => { setShowQuickAdd(true); setQuickAddError(null); }}
                   className="mt-3 w-full py-2 text-xs text-gray-500 border border-dashed border-gray-200 rounded-lg hover:border-black hover:text-black transition-colors flex items-center justify-center gap-1.5"
                 >
                   <Plus className="w-3 h-3" />
@@ -674,7 +633,7 @@ export default function GeneratePage() {
               <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-700">商品をすばやく追加</span>
-                  <button onClick={() => { setShowQuickAdd(false); setQuickAddFile(null); setQuickAddPreview(null); setQuickAddName(''); }} className="text-gray-400 hover:text-black">
+                  <button onClick={() => { setShowQuickAdd(false); setQuickAddFile(null); setQuickAddPreview(null); setQuickAddName(''); setQuickAddProductType('top'); setQuickAddError(null); }} className="text-gray-400 hover:text-black">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -711,6 +670,36 @@ export default function GeneratePage() {
                   placeholder="商品名"
                   className="w-full p-2 text-sm bg-white border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none"
                 />
+                {/* Product type selector — used by buildSeedreamPrompt() */}
+                <div className="space-y-1">
+                  <p className="text-[10px] text-gray-500 font-medium">商品タイプ</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {([
+                      { value: 'top',       label: 'トップス' },
+                      { value: 'bottom',    label: 'ボトムス' },
+                      { value: 'dress',     label: 'ワンピース' },
+                      { value: 'outerwear', label: 'アウター' },
+                      { value: 'shoes',     label: 'シューズ' },
+                      { value: 'accessory', label: 'アクセサリー' },
+                    ] as { value: Product['product_type']; label: string }[]).map(({ value, label }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setQuickAddProductType(value)}
+                        className={`py-1.5 text-[10px] font-medium rounded-md border transition-colors ${
+                          quickAddProductType === value
+                            ? 'bg-black text-white border-black'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-black hover:text-black'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {quickAddError && (
+                  <p className="text-[11px] text-red-500 bg-red-50 border border-red-100 rounded-md px-2 py-1.5">{quickAddError}</p>
+                )}
                 <button
                   onClick={handleQuickAddSubmit}
                   disabled={!quickAddFile || !quickAddName.trim() || quickAddUploading}
@@ -732,7 +721,7 @@ export default function GeneratePage() {
           </div>
 
           {/* Manual Upload Fallback — if user wants to use a one-off image */}
-          {!selectedProduct && (
+          {selectedProducts.length === 0 && (
             <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
               <h3 className="font-bold text-gray-900 mb-4 text-sm">または画像を直接アップロード</h3>
               <input
@@ -854,35 +843,23 @@ export default function GeneratePage() {
             )}
           </div>
 
-          {/* Face Swap Only Toggle */}
+          {/* Custom Prompt */}
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-gray-500" />
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">フェイススワップのみ</h3>
-                  <p className="text-[10px] text-gray-400 mt-0.5">アップロード画像の顔をモデルの顔に入れ替えます</p>
-                </div>
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="w-4 h-4 text-gray-500" />
+              <div>
+                <h3 className="font-bold text-gray-900 text-sm">カスタムプロンプト（任意）</h3>
+                <p className="text-[10px] text-gray-400 mt-0.5">生成結果をカスタマイズするプロンプトを入力</p>
               </div>
-              <button
-                onClick={() => setFaceSwapOnly(!faceSwapOnly)}
-                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                  faceSwapOnly ? 'bg-black' : 'bg-gray-200'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${
-                    faceSwapOnly ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
             </div>
-            {faceSwapOnly && (
-              <div className="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-lg">
-                <p className="text-[11px] text-amber-700">
-                  有効時：商品画像の顔をモデルの顔に差し替えます。背景やアスペクト比の設定は無視されます。
-                </p>
-              </div>
+            <textarea
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder="例：夕暮れ時の屋上でシティビューを背景にしたプロフェッショナルフォトシュート..."
+              className="w-full p-3 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-black outline-none resize-none h-20"
+            />
+            {customPrompt.trim() && (
+              <p className="text-[10px] text-gray-400 mt-1">カスタムプロンプトが有効です。空にするとデフォルトのプロンプトが使用されます。</p>
             )}
           </div>
 
@@ -890,9 +867,15 @@ export default function GeneratePage() {
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
             <h3 className="font-bold text-gray-900 mb-4 text-sm">生成設定</h3>
             <div className="space-y-4">
-              {!faceSwapOnly && (
               <div>
-                <label className="text-xs font-medium text-gray-600 mb-2 block">背景</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-gray-600">背景</label>
+                  {background === '' ? (
+                    <span className="text-[10px] text-amber-500 font-medium">無効（カスタムプロンプトを優先）</span>
+                  ) : (
+                    <span className="text-[10px] text-gray-400">選択中のタイルをクリックで無効化</span>
+                  )}
+                </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { value: 'スタジオ（白背景）', label: 'スタジオ', image: '/backgrounds/studio.webp' },
@@ -902,12 +885,12 @@ export default function GeneratePage() {
                   ].map((bg) => (
                     <button
                       key={bg.value}
-                      onClick={() => setBackground(bg.value)}
+                      onClick={() => setBackground(prev => prev === bg.value ? '' : bg.value)}
                       className={`relative aspect-square rounded-lg border overflow-hidden transition-all group ${
                         background === bg.value
                           ? 'border-black ring-2 ring-black/10'
                           : 'border-gray-100 hover:border-black'
-                      }`}
+                      } ${background === '' ? 'opacity-50' : ''}`}
                     >
                       <Image
                         src={bg.image}
@@ -931,8 +914,6 @@ export default function GeneratePage() {
                   ))}
                 </div>
               </div>
-              )}
-              {!faceSwapOnly && (
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1.5 block">アスペクト比</label>
                 <div className="flex gap-2">
@@ -958,7 +939,6 @@ export default function GeneratePage() {
                   ))}
                 </div>
               </div>
-              )}
             </div>
 
             <button
@@ -973,10 +953,10 @@ export default function GeneratePage() {
               {isGenerating ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  {faceSwapOnly ? 'フェイススワップ中...' : '生成中...'}
+                  生成中...
                 </>
               ) : (
-                faceSwapOnly ? 'フェイススワップ実行' : '生成する'
+                '生成する'
               )}
             </button>
             <p className="text-[10px] text-gray-400 text-center mt-2">残りチケット: 20 · 保存先: {selectedCampaign?.name || '未選択'}</p>
@@ -1025,18 +1005,10 @@ export default function GeneratePage() {
                 </div>
                 {/* Progress indicator */}
                 <div className="flex gap-4 text-xs text-gray-400">
-                  {(faceSwapOnly
-                    ? [
-                        { step: 1, label: 'アップロード' },
-                        { step: 2, label: 'フェイススワップ' },
-                      ]
-                    : [
-                        { step: 1, label: 'モデル生成' },
-                        { step: 2, label: 'アップロード' },
-                        { step: 3, label: 'フェイススワップ' },
-                        { step: 4, label: '衣装合成' },
-                      ]
-                  ).map(({ step, label }) => {
+                  {[
+                    { step: 1, label: '画像生成処理' },
+                    { step: 2, label: '保存' },
+                  ].map(({ step, label }) => {
                     const isActive = currentStepNum === step;
                     const isCompleted = currentStepNum > step;
                     return (
@@ -1079,23 +1051,6 @@ export default function GeneratePage() {
                     />
                   </div>
                 </div>
-                {faceSwapWarning && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
-                    <span className="text-amber-500 mt-0.5 flex-shrink-0">&#9888;</span>
-                    <div className="flex-1">
-                      <p className="text-xs text-amber-700 font-medium">結果が元の画像と同じに見える場合</p>
-                      <p className="text-[11px] text-amber-600 mt-0.5">
-                        対象画像の顔が検出できなかった可能性があります。顔がはっきり写っている高解像度の画像をお試しください。
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setFaceSwapWarning(false)}
-                      className="text-amber-400 hover:text-amber-600 flex-shrink-0"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="flex-1 border border-dashed border-gray-200 rounded-lg bg-gray-50 flex flex-col items-center justify-center text-gray-400">

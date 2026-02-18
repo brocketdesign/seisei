@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { name, campaignId, imageData, category, description, tags } = body;
+        const { name, campaignId, imageData, category, description, tags, productType } = body;
 
         if (!name || !name.trim()) {
             return NextResponse.json({ error: '商品名を入力してください。' }, { status: 400 });
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
                 image_url: imageUrl,
                 description: description || null,
                 category: category || null,
+                product_type: productType || 'top',
                 tags: tags || null,
                 is_active: true,
             })
