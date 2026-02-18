@@ -5,8 +5,8 @@
 import fs from 'fs';
 import path from 'path';
 
-const API_KEY = 'SG_7729d35bb02bab18';
-const API_URL = 'https://api.segmind.com/v1/z-image-turbo';
+const API_KEY = process.env.SEGMIND_API_KEY || 'SG_7729d35bb02bab18';
+const API_URL = 'https://api.segmind.com/v1/seedream-4.5';
 
 const styles = [
   {
@@ -44,14 +44,12 @@ async function generateImage(prompt: string): Promise<Buffer> {
     },
     body: JSON.stringify({
       prompt,
-      steps: 8,
-      guidance_scale: 1,
-      seed: -1,
-      width: 512,
-      height: 768,
-      image_format: 'webp',
-      quality: 90,
-      base_64: false,
+      size: '2K',
+      width: 1024,
+      height: 1536,
+      aspect_ratio: '2:3',
+      max_images: 1,
+      sequential_image_generation: 'disabled',
     }),
   });
 

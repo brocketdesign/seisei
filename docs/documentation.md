@@ -2,14 +2,14 @@
 
 ## Overview
 
-Seisei is a Next.js 16 (App Router) SaaS application that lets fashion brands generate AI-powered model images, virtual try-ons, face swaps, and animated videos. All AI inference is handled through the **Segmind API** (`https://api.segmind.com/v1`). The platform is built on the following core stack:
+Seisei is a Next.js 16 (App Router) SaaS application that lets fashion brands generate AI-powered model images wearing their products, along with animated video content. The primary AI model is **Seedream 4.5**, which handles image generation, virtual try-on, and product-on-model compositing in a single call. Legacy face-swap functionality is retained in the public v1 API. All AI inference is handled through the **Segmind API** (`https://api.segmind.com/v1`).
 
 | Layer | Technology |
 |---|---|
 | Framework | Next.js 16.1.6 (App Router), React 19, TypeScript 5 |
 | Database / Auth | Supabase (PostgreSQL + Row Level Security) |
 | File Storage | Supabase Storage (public buckets) |
-| AI Inference | Segmind API |
+| AI Inference | Segmind API (Seedream 4.5, Faceswap v5, Kling O1) |
 | Billing | Stripe |
 | Email | Resend |
 | Styling | Tailwind CSS v4 |
@@ -18,7 +18,7 @@ Seisei is a Next.js 16 (App Router) SaaS application that lets fashion brands ge
 
 ## AI Provider: Segmind
 
-All image and video generation calls are routed through a single `SegmindClient` class defined in [`src/utils/segmind.ts`](../src/utils/segmind.ts). The client abstracts four Segmind models and exposes typed methods for each.
+All image and video generation calls are routed through a single `SegmindClient` class defined in [`src/utils/segmind.ts`](../src/utils/segmind.ts). The client exposes typed methods for each model.
 
 **Base URL:** `https://api.segmind.com/v1`  
 **Authentication:** `x-api-key` header using the `SEGMIND_API_KEY` environment variable.
@@ -27,89 +27,74 @@ The client has two internal transport methods:
 - `request()` — for image endpoints; returns a base64 data URI.
 - `requestBinary()` — for video endpoints; returns a raw `Buffer`.
 
+### Helper functions
+
+- `buildSeedreamPrompt(products, background, style, customPrompt)` — Assembles a type-aware prompt for Seedream 4.5 that correctly describes each product by its `productType` (top, bottom, dress, outerwear, shoes, accessory).
+- `productTypeLabel(type)` — Returns the human-readable Japanese label for a `ProductType` value.
+
 ---
 
-## 1. Image Generation — Z-Image Turbo
+## 1. Image Generation — Seedream 4.5 *(Primary)*
 
-**Segmind model ID:** `z-image-turbo`  
-**Client method:** `segmind.generateImage(params)`  
-**Used in:** [`src/app/api/generate/route.ts`](../src/app/api/generate/route.ts), [`src/app/api/v1/models/route.ts`](../src/app/api/v1/models/route.ts), [`src/app/api/v1/products/route.ts`](../src/app/api/v1/products/route.ts)
+**Segmind model ID:** `seedream-4.5`  
+**Client method:** `segmind.seedreamGenerate(params)`  
+**Used in:** [`src/app/api/generate/route.ts`](../src/app/api/generate/route.ts), [`src/app/api/v1/models/route.ts`](../src/app/api/v1/models/route.ts), [`src/app/api/v1/products/route.ts`](../src/app/api/v1/products/route.ts), [`src/app/api/v1/generate/virtual-tryon/route.ts`](../src/app/api/v1/generate/virtual-tryon/route.ts)
 
 ### Description
 
-Z-Image Turbo is a fast, photorealistic text-to-image model optimised for fashion and product photography. It is used to generate model portraits and flat-lay product images from a text prompt.
+Seedream 4.5 is a high-quality text-to-image model with multi-image input support. It replaces the previous Z-Image Turbo + SegFit + FaceSwap pipeline for all dashboard generation. A single Seedream call can accept reference images (model face, product photos) via the `image_input` array and produce a composited fashion photograph — no separate try-on or face-swap step is needed.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `prompt` | `string` | — | Text description of the image to generate |
-| `negative_prompt` | `string` | — | Elements to exclude (e.g. `"person, mannequin, blurry"`) |
-| `steps` | `number` | `8` | Diffusion steps (range 1–8) |
-| `guidance_scale` | `number` | `1` | Classifier-free guidance scale — keep low for this model |
-| `seed` | `number` | `-1` | `-1` for random; fixed value for reproducible results |
-| `width` | `number` | `1024` | Output width in pixels |
-| `height` | `number` | `1024` | Output height in pixels |
-| `image_format` | `string` | `"webp"` | Output format: `webp`, `png`, or `jpeg` |
-| `quality` | `number` | `90` | Compression quality (1–100) |
-| `base_64` | `boolean` | `false` | If `false`, the API returns a raw binary response |
+| `image_input` | `string[]` | `[]` | Array of public image URLs used as reference (model face, product images) |
+| `size` | `string` | `"2K"` | Output resolution preset: `"1K"`, `"2K"`, or `"4K"` |
+| `width` | `number` | `1024` | Output width in pixels (1024–4096) |
+| `height` | `number` | `1024` | Output height in pixels (1024–4096) |
+| `aspect_ratio` | `string` | `"1:1"` | Aspect ratio: `"1:1"`, `"2:3"`, `"3:4"`, `"4:3"`, `"3:2"`, `"9:16"`, `"16:9"` |
+| `max_images` | `number` | `1` | Number of images to generate (1–4) |
+| `sequential_image_generation` | `string` | `"disabled"` | Sequential generation control |
+
+### Product Type System
+
+Each product has a `product_type` field that tells the prompt builder exactly what kind of item it is:
+
+| `product_type` | Japanese label | Description |
+|---|---|---|
+| `top` | トップス | Shirts, blouses, t-shirts, sweaters |
+| `bottom` | ボトムス | Pants, skirts, shorts |
+| `dress` | ワンピース | Dresses, jumpsuits, full-body garments |
+| `outerwear` | アウター | Jackets, coats, blazers |
+| `shoes` | シューズ | Footwear |
+| `accessory` | アクセサリー | Bags, cups, jewellery, watches, and other non-clothing items |
+
+The `buildSeedreamPrompt()` function uses these types to construct accurate prompts (e.g. "wearing the **top** shown in the second reference image" vs "holding the **accessory** shown in the third reference image"), preventing misclassification errors such as a dress being described as a top.
 
 ### Typical use cases
 
-- **Model portraits** — full-body fashion photograph from a descriptive prompt built via `buildModelPrompt()`. Rendered at `1024×1024` (1:1), `896×1120` (4:5), or `720×1280` (9:16) depending on the chosen aspect ratio.
-- **Product / garment images** — flat-lay shots rendered at `768×768` with a `negative_prompt` that excludes any human subjects.
-- **Hero & background imagery** — used by seed scripts to pre-generate UI assets (`scripts/generate-hero-images.ts`, `scripts/generate-background-images.ts`, etc.).
+- **Dashboard generation (Seedream mode)** — model face URL + multiple product URLs passed as `image_input`. A single call produces a fashion photograph of the model wearing/holding all selected products.
+- **Model portraits** — `seedreamGenerate()` with a descriptive prompt and no `image_input`.
+- **Product images** — flat-lay shots via `seedreamGenerate()` with a product photography prompt.
+- **Virtual try-on (v1 API)** — model + garment URLs as `image_input` with a type-aware prompt.
+- **Hero & background imagery** — used by seed scripts to pre-generate UI assets.
 
 ### Response
 
-Returns a base64 data URI (e.g. `data:image/png;base64,...`) which is then uploaded to Supabase Storage to obtain a permanent public URL.
+Returns a raw binary image buffer. The server converts this to a base64 data URI or uploads directly to Supabase Storage.
 
 ---
 
-## 2. Virtual Try-On — SegFit v1.3
-
-**Segmind model ID:** `segfit-v1.3`  
-**Client method:** `segmind.virtualTryOn(params)`  
-**Used in:** [`src/app/api/generate/route.ts`](../src/app/api/generate/route.ts), [`src/app/api/v1/generate/virtual-tryon/route.ts`](../src/app/api/v1/generate/virtual-tryon/route.ts)
-
-### Description
-
-SegFit v1.3 is a virtual garment try-on model. Given a clothing/outfit image and a person/model image, it composites the outfit onto the model with realistic draping and lighting. Both input images **must be publicly accessible URLs** — base64 is not accepted, so images are uploaded to Supabase Storage before the call is made.
-
-### Parameters
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `outfit_image` | `string` | — | Public URL of the garment / clothing image |
-| `model_image` | `string` | — | Public URL of the model / person image |
-| `mask_image` | `string` | — | Optional URL of a custom clothing mask |
-| `model_type` | `"Quality"` \| `"Speed"` | `"Quality"` | Trade-off between quality and inference speed |
-| `cn_strength` | `number` | `0.8` | ControlNet conditioning strength (0–1) |
-| `cn_end` | `number` | `0.5` | ControlNet end timestep (0–1) |
-| `image_format` | `string` | `"png"` | Output format: `png`, `jpeg`, or `webp` |
-| `image_quality` | `number` | `90` | Compression quality (1–100) |
-| `seed` | `number` | `42` | Fixed seed for reproducibility |
-| `base64` | `boolean` | `false` | Return raw binary when `false` |
-
-### Response
-
-Returns a base64 data URI of the composited image.
-
-### Standalone API endpoint
-
-The public REST API also exposes try-on directly at `POST /api/v1/generate/virtual-tryon`. See [`docs/admin-api.md`](admin-api.md) for the full request/response schema.
-
----
-
-## 3. Face Swap — Faceswap v5
+## 2. Face Swap — Faceswap v5 *(Legacy — v1 API only)*
 
 **Segmind model ID:** `faceswap-v5`  
 **Client method:** `segmind.faceSwap(params)`  
-**Used in:** [`src/app/api/generate/route.ts`](../src/app/api/generate/route.ts)
+**Used in:** [`src/app/api/v1/generate/faceswap/route.ts`](../src/app/api/v1/generate/faceswap/route.ts), [`src/app/api/generate/route.ts`](../src/app/api/generate/route.ts) (faceswap mode only)
 
 ### Description
 
-Faceswap v5 replaces the face in a target image with the face from a source (reference) image. Both inputs must be publicly accessible URLs. In the generation pipeline, the source face is taken from the model's uploaded avatar, and the target is the AI-generated full-body image produced in Step 1.
+Faceswap v5 replaces the face in a target image with the face from a source (reference) image. Both inputs must be publicly accessible URLs. **This model is no longer used in the main dashboard pipeline** — Seedream 4.5 handles face consistency natively via image reference inputs. Faceswap is retained for the standalone `POST /api/v1/generate/faceswap` endpoint and the dashboard `faceswap` mode.
 
 ### Parameters
 
@@ -126,13 +111,9 @@ Faceswap v5 replaces the face in a target image with the face from a source (ref
 
 Returns a base64 data URI of the face-swapped image.
 
-### Failure handling
-
-Face swap is treated as a best-effort step. If the Segmind call fails (e.g. no face detected), the pipeline logs the error and continues with the original generated model image, so the user always receives a result.
-
 ---
 
-## 4. Video Generation — Kling O1
+## 3. Video Generation — Kling O1
 
 **Segmind model ID:** `kling-o1-image-to-video`  
 **Client method:** `segmind.imageToVideo(params)`  
@@ -141,7 +122,7 @@ Face swap is treated as a best-effort step. If the Segmind call fails (e.g. no f
 
 ### Description
 
-Kling O1 animates a static image into a short video clip, guided by a text prompt. The source image is typically a completed generation (try-on result) stored in Supabase Storage. The output is a binary MP4 buffer that is uploaded to Supabase Storage and returned as a permanent URL.
+Kling O1 animates a static image into a short video clip, guided by a text prompt. The source image is typically a completed generation stored in Supabase Storage. The output is a binary MP4 buffer that is uploaded to Supabase Storage and returned as a permanent URL.
 
 ### Parameters
 
@@ -162,15 +143,13 @@ A `video_generations` row is inserted before the Kling call with `status: 'proce
 
 ---
 
-## 5. Full Generation Pipeline
+## 4. Dashboard Generation Pipeline
 
-The `POST /api/generate` endpoint (cookie-auth, dashboard use) supports a `full-pipeline` mode that chains all four models into a single streamed operation.
+The `POST /api/generate` endpoint (cookie-auth, dashboard use) supports multiple modes. The primary **seedream** mode produces a complete fashion photograph in a single AI call.
 
 ```
-Step 1 — Z-Image Turbo     Generate a full-body model image from a prompt
-Step 2 — Supabase Storage  Upload outfit + generated model to obtain public URLs
-Step 3 — Faceswap v5       Swap the model's reference avatar onto the generated body
-Step 4 — SegFit v1.3       Dress the face-swapped model in the target outfit
+Step 1 — Seedream 4.5      Generate a fashion photograph from model face + product images + prompt
+Step 2 — Supabase Storage   Save the result and create a generations record
 ```
 
 Progress is streamed to the browser via **Server-Sent Events (SSE)** so the UI can show a step-by-step progress bar in real time. The final result and a `generations` database row are sent in the `complete` event.
@@ -179,10 +158,17 @@ Progress is streamed to the browser via **Server-Sent Events (SSE)** so the UI c
 
 | `mode` value | Description | Models used |
 |---|---|---|
-| `full-pipeline` | Full 4-step pipeline | Z-Image Turbo → Faceswap v5 → SegFit v1.3 |
-| `tryon` | Try-on only (existing model + outfit) | SegFit v1.3 |
-| `generate` | Text-to-image only | Z-Image Turbo |
-| `faceswap` | Face swap only | Faceswap v5 |
+| `seedream` / `full-pipeline` | Full generation — model + products composited | Seedream 4.5 |
+| `generate` | Text-to-image only | Seedream 4.5 |
+| `faceswap` | Face swap only (legacy) | Faceswap v5 |
+
+### Multi-product selection
+
+The dashboard UI allows selecting **multiple products** simultaneously. Each product's image URL and `product_type` are sent to the API. Seedream receives all product images in a single `image_input` array (model face first, products after), and `buildSeedreamPrompt()` generates a prompt that references each product by its type and position.
+
+### Custom prompt
+
+Users can provide an optional **custom prompt** via a textarea in the generation UI. When provided, it is appended to the auto-generated prompt to give users fine-grained control over the output style, pose, or setting.
 
 ### Aspect ratio → dimensions mapping
 
@@ -194,6 +180,19 @@ Progress is streamed to the browser via **Server-Sent Events (SSE)** so the UI c
 
 ---
 
+## 5. Deprecated Models
+
+The following models were previously used in the generation pipeline but have been replaced by Seedream 4.5:
+
+| Model | Segmind ID | Replacement |
+|---|---|---|
+| Z-Image Turbo | `z-image-turbo` | Seedream 4.5 — higher quality, multi-image input |
+| SegFit v1.3 | `segfit-v1.3` | Seedream 4.5 — handles try-on natively via image references |
+
+The `generateImage()` method on `SegmindClient` is marked `@deprecated`. The `virtualTryOn()` method remains available but is no longer called from the dashboard pipeline.
+
+---
+
 ## Storage Paths
 
 Images and videos are uploaded to Supabase Storage under the following prefixes:
@@ -202,7 +201,6 @@ Images and videos are uploaded to Supabase Storage under the following prefixes:
 |---|---|
 | Outfit / garment images | `outfits/` |
 | Model images (generated) | `models/` |
-| Face-swapped model images | `faceswapped/` |
 | Final generated images | `generated/` |
 | Animated video clips | `videos/` |
 

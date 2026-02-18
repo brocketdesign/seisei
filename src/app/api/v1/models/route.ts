@@ -110,18 +110,13 @@ export async function POST(request: NextRequest) {
         let thumbnailUrl: string;
 
         if (isGenerateMode) {
-            // Generate model image via Segmind z-image-turbo
+            // Generate model image via Seedream 4.5
             const segmind = createSegmindClient();
-            const imageResult = await segmind.generateImage({
-                prompt: prompt.trim(),
-                steps: 8,
-                guidance_scale: 1,
-                seed: -1,
-                width: 1024,
-                height: 1024,
-                image_format: 'png',
-                quality: 95,
-                base_64: false,
+            const imageResult = await segmind.seedreamGenerate({
+                prompt: `Professional headshot portrait photograph of a ${sex} fashion model. ${prompt.trim()}. Photorealistic, high quality portrait, 8K resolution, sharp focus, professional studio lighting, clean background.`,
+                width: 2048,
+                height: 2048,
+                aspect_ratio: '1:1',
             });
 
             if (!imageResult.image) {

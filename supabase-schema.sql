@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS public.products (
   description TEXT,
   image_url TEXT NOT NULL,
   category TEXT,
+  product_type TEXT DEFAULT 'top' CHECK (product_type IN ('top', 'bottom', 'dress', 'outerwear', 'shoes', 'accessory')),
   tags TEXT[],
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW(),

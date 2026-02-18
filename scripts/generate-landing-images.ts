@@ -5,8 +5,8 @@
 import fs from 'fs';
 import path from 'path';
 
-const API_KEY = 'SG_7729d35bb02bab18';
-const API_URL = 'https://api.segmind.com/v1/z-image-turbo';
+const API_KEY = process.env.SEGMIND_API_KEY || 'SG_7729d35bb02bab18';
+const API_URL = 'https://api.segmind.com/v1/seedream-4.5';
 
 const prompts = [
   {
@@ -60,6 +60,7 @@ const prompts = [
 ];
 
 async function generateImage(prompt: string, width: number, height: number): Promise<Buffer> {
+  const aspectRatio = width === height ? '1:1' : width > height ? '4:3' : '3:4';
   const response = await fetch(API_URL, {
     method: 'POST',
     headers: {
@@ -68,14 +69,12 @@ async function generateImage(prompt: string, width: number, height: number): Pro
     },
     body: JSON.stringify({
       prompt,
-      steps: 8,
-      guidance_scale: 1,
-      seed: -1,
+      size: '2K',
       width,
       height,
-      image_format: 'webp',
-      quality: 95,
-      base_64: false,
+      aspect_ratio: aspectRatio,
+      max_images: 1,
+      sequential_image_generation: 'disabled',
     }),
   });
 

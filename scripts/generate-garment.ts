@@ -1,7 +1,7 @@
 import fs from 'fs';
 
-const API_KEY = 'SG_7729d35bb02bab18';
-const API_URL = 'https://api.segmind.com/v1/z-image-turbo';
+const API_KEY = process.env.SEGMIND_API_KEY || 'SG_7729d35bb02bab18';
+const API_URL = 'https://api.segmind.com/v1/seedream-4.5';
 
 async function main() {
   console.log('Generating garment flat-lay...');
@@ -9,15 +9,13 @@ async function main() {
     method: 'POST',
     headers: { 'x-api-key': API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      prompt: 'A luxurious black oversized blazer laid flat on a pure white background, product photography, e-commerce style, minimal, perfectly lit, no model, just the garment, high resolution',
-      negative_prompt: 'person, model, mannequin, low quality, blurry',
-      samples: 1,
-      scheduler: 'DPM++ 2M SDE',
-      num_inference_steps: 20,
-      guidance_scale: 7,
-      seed: 42,
-      img_width: 768,
-      img_height: 768,
+      prompt: 'Professional flat-lay product photography of a luxurious black oversized blazer on a pure white background, e-commerce style, minimal, perfectly lit, no model, just the garment, high resolution, 8K quality',
+      size: '2K',
+      width: 2048,
+      height: 2048,
+      aspect_ratio: '1:1',
+      max_images: 1,
+      sequential_image_generation: 'disabled',
     }),
   });
   if (!response.ok) throw new Error(await response.text());

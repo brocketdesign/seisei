@@ -2,12 +2,33 @@
  * Segmind API Client
  * 
  * Models:
- * - segfit-v1.3: Virtual try-on for clothes
- * - z-image-turbo: Fast photorealistic image generation
- * - faceswap-v5: Face/head swapping
+ * - seedream-4.5: Photorealistic image generation with multi-image input (face, clothes, accessories)
+ * - segfit-v1.3: Virtual try-on for clothes (kept for v1 API backward compat)
+ * - faceswap-v5: Face/head swapping (kept for v1 API backward compat)
+ * - kling-o1-image-to-video: Image to video animation
  */
 
 const SEGMIND_API_URL = 'https://api.segmind.com/v1';
+
+/** Product types recognised by the prompt builder */
+export type ProductType =
+    | 'top'        // shirts, blouses, jackets, hoodies, sweaters, etc.
+    | 'bottom'     // pants, skirts, shorts, etc.
+    | 'dress'      // one-piece dresses, jumpsuits, etc.
+    | 'outerwear'  // coats, blazers, parkas, etc.
+    | 'shoes'      // footwear
+    | 'accessory'; // bags, cups, hats, jewelry, scarves, etc.
+
+interface SeedreamRequest {
+    prompt: string;
+    image_input?: string[];  // Array of public URLs (face, clothes, accessories)
+    size?: string;           // e.g. '2K'
+    width?: number;          // 1024-4096, default 2048
+    height?: number;         // 1024-4096, default 2048
+    aspect_ratio?: string;   // e.g. 'match_input_image', '1:1', '4:5', '9:16'
+    max_images?: number;     // 1-15, default 1
+    sequential_image_generation?: string; // 'disabled' | 'enabled'
+}
 
 interface SegfitRequest {
     outfit_image: string; // URL of clothing/outfit image
@@ -56,6 +77,13 @@ interface SegmindResponse {
     video?: Buffer; // raw video binary
     status?: string;
     error?: string;
+}
+
+/** Describes a product image to include in a Seedream generation */
+export interface SeedreamProductInput {
+    imageUrl: string;
+    productType: ProductType;
+    name?: string;
 }
 
 /**
@@ -182,7 +210,25 @@ class SegmindClient {
     }
 
     /**
+     * Generate photorealistic images using Seedream 4.5
+     * Supports multi-image input: model face, clothing items, accessories
+     */
+    async seedreamGenerate(params: SeedreamRequest): Promise<SegmindResponse> {
+        return this.request('seedream-4.5', {
+            prompt: params.prompt,
+            ...(params.image_input && params.image_input.length > 0 && { image_input: params.image_input }),
+            size: params.size ?? '2K',
+            width: params.width ?? 2048,
+            height: params.height ?? 2048,
+            aspect_ratio: params.aspect_ratio ?? (params.image_input?.length ? 'match_input_image' : '1:1'),
+            max_images: params.max_images ?? 1,
+            sequential_image_generation: params.sequential_image_generation ?? 'disabled',
+        });
+    }
+
+    /**
      * Generate photorealistic images using Z-Image Turbo
+     * @deprecated Use seedreamGenerate() instead. Kept for backward compatibility.
      */
     async generateImage(params: ZImageTurboRequest): Promise<SegmindResponse> {
         return this.request('z-image-turbo', {
@@ -236,4 +282,86 @@ export function createSegmindClient(apiKey?: string): SegmindClient {
     return new SegmindClient(key);
 }
 
-export type { SegfitRequest, ZImageTurboRequest, FaceswapRequest, KlingImageToVideoRequest, SegmindResponse };
+export type { SeedreamRequest, SegfitRequest, ZImageTurboRequest, FaceswapRequest, KlingImageToVideoRequest, SegmindResponse };
+
+/**
+ * Build a Seedream prompt that describes a photoshoot with a specific model
+ * wearing the provided products (clothes, accessories, etc.).
+ *
+ * Each product has a `productType` so the prompt correctly labels garments
+ * (avoiding e.g. a dress being described as a top).
+ */
+export function buildSeedreamPrompt(opts: {
+    modelDescription: string;
+    products: SeedreamProductInput[];
+    background: string;
+    customPrompt?: string;
+}): string {
+    const { modelDescription, products, background, customPrompt } = opts;
+
+    // If user provided a fully custom prompt, use it with minimal wrapping
+    if (customPrompt && customPrompt.trim().length > 0) {
+        // Still include reference to the model and products so Seedream
+        // knows what the reference images are
+        const productDescriptions = products.map(p => {
+            const label = productTypeLabel(p.productType);
+            return p.name ? `the reference ${label} ("${p.name}")` : `the reference ${label}`;
+        });
+        const wearing = productDescriptions.length > 0
+            ? ` wearing/holding ${productDescriptions.join(', ')}`
+            : '';
+        return `${customPrompt.trim()} The model is ${modelDescription}${wearing}.`;
+    }
+
+    // Auto-build prompt
+    const clothingItems: string[] = [];
+    const accessories: string[] = [];
+
+    for (const p of products) {
+        const label = p.name
+            ? `the reference ${productTypeLabel(p.productType)} ("${p.name}")`
+            : `the reference ${productTypeLabel(p.productType)}`;
+
+        if (p.productType === 'accessory' || p.productType === 'shoes') {
+            accessories.push(label);
+        } else {
+            clothingItems.push(label);
+        }
+    }
+
+    let wearingClause = '';
+    if (clothingItems.length > 0) {
+        wearingClause = `wearing ${clothingItems.join(' and ')}`;
+    }
+    if (accessories.length > 0) {
+        const accessoryClause = accessories.length === 1
+            ? `with ${accessories[0]}`
+            : `with ${accessories.join(' and ')}`;
+        wearingClause = wearingClause
+            ? `${wearingClause}, ${accessoryClause}`
+            : accessoryClause;
+    }
+
+    const bgClause = background
+        ? ` striking confident model poses ${background}.`
+        : ' striking confident model poses.';
+
+    return [
+        `Create a professional fashion brand photoshoot of ${modelDescription}`,
+        wearingClause ? `, ${wearingClause},` : ',',
+        bgClause,
+        ' Photorealistic, high quality fashion photography, 8K resolution, sharp focus, professional studio lighting.',
+    ].join('');
+}
+
+function productTypeLabel(type: ProductType): string {
+    switch (type) {
+        case 'top': return 'top garment';
+        case 'bottom': return 'bottom garment';
+        case 'dress': return 'dress/one-piece';
+        case 'outerwear': return 'outerwear/jacket';
+        case 'shoes': return 'shoes/footwear';
+        case 'accessory': return 'accessory';
+        default: return 'clothing item';
+    }
+}

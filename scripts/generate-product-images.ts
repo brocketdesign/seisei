@@ -2,7 +2,7 @@
  * Generate product images for seeding campaigns
  * Run: npx tsx scripts/generate-product-images.ts
  *
- * Uses the Segmind z-image-turbo API to generate flat-lay garment images.
+ * Uses the Segmind Seedream 4.5 API to generate flat-lay garment images.
  * Images are saved to public/products/<campaign-folder>/<product>.webp
  *
  * Requires env var: SEGMIND_API_KEY (falls back to hardcoded key)
@@ -11,7 +11,7 @@ import fs from 'fs';
 import path from 'path';
 
 const API_KEY = process.env.SEGMIND_API_KEY || 'SG_7729d35bb02bab18';
-const API_URL = 'https://api.segmind.com/v1/z-image-turbo';
+const API_URL = 'https://api.segmind.com/v1/seedream-4.5';
 
 /**
  * Products grouped by campaign name (must match seed-campaigns.ts).
@@ -187,16 +187,13 @@ async function generateImage(prompt: string): Promise<Buffer> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      prompt,
-      negative_prompt: 'person, model, mannequin, low quality, blurry, deformed',
-      steps: 8,
-      guidance_scale: 1,
-      seed: -1,
-      width: 768,
-      height: 768,
-      image_format: 'webp',
-      quality: 90,
-      base_64: false,
+      prompt: `Professional flat-lay product photography: ${prompt}`,
+      size: '2K',
+      width: 2048,
+      height: 2048,
+      aspect_ratio: '1:1',
+      max_images: 1,
+      sequential_image_generation: 'disabled',
     }),
   });
 

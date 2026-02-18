@@ -10,11 +10,13 @@ export const maxDuration = 120;
  * POST /api/v1/generate/virtual-tryon
  *
  * Virtual try-on: takes a product/outfit image and a model image,
- * generates the model wearing the outfit.
+ * generates the model wearing the outfit using Seedream 4.5.
  *
  * Body:
- *  - outfitImage (string, required): Base64 data URI of the outfit/garment image
+ *  - outfitImage (string, required): Base64 data URI or public URL of the outfit/garment image
  *  - modelImage  (string, required): Base64 data URI or public URL of the model image
+ *  - prompt      (string, optional): Custom prompt for the generation
+ *  - productType (string, optional): 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory'
  *  - campaignId  (string, optional): UUID of the campaign to associate
  *  - aspectRatio (string, optional): '1:1' | '4:5' | '9:16'
  */
@@ -36,11 +38,11 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { outfitImage, modelImage, campaignId, aspectRatio } = body;
+        const { outfitImage, modelImage, prompt, productType, campaignId, aspectRatio } = body;
 
         if (!outfitImage) {
             return NextResponse.json(
-                { error: 'outfitImage is required (base64 data URI).' },
+                { error: 'outfitImage is required (base64 data URI or public URL).' },
                 { status: 400 },
             );
         }
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
 
         const startTime = Date.now();
 
-        // Upload images to get public URLs
+        // Upload images to get public URLs if needed
         const outfitUrl = outfitImage.startsWith('data:')
             ? await uploadImageToStorage(outfitImage, 'outfits')
             : outfitImage;
@@ -61,11 +63,25 @@ export async function POST(request: NextRequest) {
             ? await uploadImageToStorage(modelImage, 'models')
             : modelImage;
 
-        // Run virtual try-on via Segmind SegFit v1.3
+        // Build prompt for Seedream
+        const typeLabel = productType === 'bottom' ? 'bottom garment'
+            : productType === 'dress' ? 'dress/one-piece'
+            : productType === 'outerwear' ? 'outerwear/jacket'
+            : productType === 'shoes' ? 'shoes/footwear'
+            : productType === 'accessory' ? 'accessory'
+            : 'top garment';
+
+        const seedreamPrompt = prompt
+            || `Create a professional fashion brand photoshoot of the reference model wearing the reference ${typeLabel}, striking confident model poses against a clean white photography studio background with professional lighting. Photorealistic, high quality fashion photography, 8K resolution, sharp focus.`;
+
+        // Run generation via Seedream 4.5
         const segmind = createSegmindClient();
-        const result = await segmind.virtualTryOn({
-            outfit_image: outfitUrl,
-            model_image: modelUrl,
+        const result = await segmind.seedreamGenerate({
+            prompt: seedreamPrompt,
+            image_input: [modelUrl, outfitUrl],
+            width: 2048,
+            height: 2048,
+            aspect_ratio: 'match_input_image',
         });
 
         // Upload generated image

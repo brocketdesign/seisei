@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
  *  - campaignName (string, optional): Name of campaign — created automatically if it doesn't exist
  *  - description  (string, optional): Product description
  *  - category     (string, optional): Product category
+ *  - productType  (string, optional): 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory' (default: 'top')
  *  - tags         (string[], optional): Product tags
  */
 export async function POST(request: NextRequest) {
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
         const adminClient = getAdminClient();
 
         const body = await request.json();
-        const { name, prompt, imageData, campaignId, campaignName, description, category, tags } = body;
+        const { name, prompt, imageData, campaignId, campaignName, description, category, tags, productType } = body;
 
         if (!name || !name.trim()) {
             return NextResponse.json({ error: 'name is required.' }, { status: 400 });
@@ -152,19 +153,13 @@ export async function POST(request: NextRequest) {
         let imageUrl: string;
 
         if (isGenerateMode) {
-            // Generate product image via Segmind z-image-turbo
+            // Generate product image via Seedream 4.5
             const segmind = createSegmindClient();
-            const imageResult = await segmind.generateImage({
-                prompt: prompt.trim(),
-                negative_prompt: 'person, model, mannequin, low quality, blurry, deformed',
-                steps: 8,
-                guidance_scale: 1,
-                seed: -1,
-                width: 768,
-                height: 768,
-                image_format: 'webp',
-                quality: 90,
-                base_64: false,
+            const imageResult = await segmind.seedreamGenerate({
+                prompt: `Professional flat-lay product photography of a ${prompt.trim()}. Clean white background, no person, no mannequin, high quality studio lighting, 8K resolution.`,
+                width: 2048,
+                height: 2048,
+                aspect_ratio: '1:1',
             });
 
             if (!imageResult.image) {
@@ -192,10 +187,11 @@ export async function POST(request: NextRequest) {
                 description: description || null,
                 image_url: imageUrl,
                 category: category || null,
+                product_type: productType || 'top',
                 tags: tags || [],
                 is_active: true,
             })
-            .select('id, name, description, image_url, category, tags, campaign_id, is_active, created_at')
+            .select('id, name, description, image_url, category, product_type, tags, campaign_id, is_active, created_at')
             .single();
 
         if (dbError) {

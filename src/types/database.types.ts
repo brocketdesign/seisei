@@ -207,6 +207,7 @@ export interface Database {
                     description: string | null
                     image_url: string
                     category: string | null
+                    product_type: 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory'
                     tags: string[] | null
                     is_active: boolean
                     created_at: string
@@ -220,6 +221,7 @@ export interface Database {
                     description?: string | null
                     image_url: string
                     category?: string | null
+                    product_type?: 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory'
                     tags?: string[] | null
                     is_active?: boolean
                     created_at?: string
@@ -233,6 +235,7 @@ export interface Database {
                     description?: string | null
                     image_url?: string
                     category?: string | null
+                    product_type?: 'top' | 'bottom' | 'dress' | 'outerwear' | 'shoes' | 'accessory'
                     tags?: string[] | null
                     is_active?: boolean
                     created_at?: string
