@@ -1,0 +1,48 @@
+#!/usr/bin/expect -f
+
+set timeout 120
+
+# Start gcloud auth
+spawn bash -c "export PATH=\"\$HOME/gcloud/google-cloud-sdk/bin:\$PATH\" && gcloud auth login --no-launch-browser"
+
+expect {
+  "Go to the following link" {
+    expect {
+      "https://accounts.google.com" {
+        # Print the URL for the user
+        puts "\n=== AUTHENTICATION URL ==="
+        puts $expect_out(0,string)
+        puts "==========================\n"
+        puts "Please open this URL in your browser and paste the code here:"
+      }
+    }
+  }
+}
+
+# Wait for the prompt for verification code
+expect "enter the verification code"
+
+# Get user input
+stty_echo -raw
+puts -nonewline "> "
+flush stdout
+set code [gets stdin]
+stty echo raw
+
+# Send the code
+send "$code\r"
+
+# Wait for completion
+expect {
+  "You are now authenticated" {
+    puts "\n✓ Authentication successful!"
+  }
+  "ERROR" {
+    puts "\n✗ Authentication failed"
+  }
+  timeout {
+    puts "\n✗ Timeout"
+  }
+}
+
+expect eof
