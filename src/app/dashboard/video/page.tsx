@@ -206,7 +206,7 @@ export default function VideoPage() {
           prompt,
           duration,
           generationId: selectedImage.id,
-          campaignId: selectedCampaign?.id || null,
+          campaignId: selectedCampaign?.id || selectedImage.campaign_id || null,
         }),
       });
 

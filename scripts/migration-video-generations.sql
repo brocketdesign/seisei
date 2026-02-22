@@ -4,6 +4,10 @@
 -- Add ai_model_id to generations table (for tracking which model was used)
 ALTER TABLE public.generations ADD COLUMN IF NOT EXISTS ai_model_id UUID REFERENCES public.ai_models(id) ON DELETE SET NULL;
 
+-- Patch existing video_generations table if campaign_id column is missing
+ALTER TABLE public.video_generations ADD COLUMN IF NOT EXISTS campaign_id UUID REFERENCES public.campaigns(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_video_generations_campaign_id ON public.video_generations(campaign_id);
+
 -- Video generations table (for storing generated videos from images)
 CREATE TABLE IF NOT EXISTS public.video_generations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
